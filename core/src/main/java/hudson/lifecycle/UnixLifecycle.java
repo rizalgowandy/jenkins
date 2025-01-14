@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.lifecycle;
 
 import static hudson.util.jna.GNUCLibrary.FD_CLOEXEC;
@@ -30,6 +31,8 @@ import static hudson.util.jna.GNUCLibrary.LIBC;
 
 import com.sun.jna.Native;
 import com.sun.jna.StringArray;
+import edu.umd.cs.findbugs.annotations.NonNull;
+import hudson.Functions;
 import hudson.Platform;
 import java.io.IOException;
 import java.util.List;
@@ -49,16 +52,12 @@ import jenkins.util.JavaVMArguments;
  * @since 1.304
  */
 public class UnixLifecycle extends Lifecycle {
-    private List<String> args;
-    private Throwable failedToObtainArgs;
 
-    public UnixLifecycle() throws IOException {
-        try {
-            args = JavaVMArguments.current();
-        } catch (UnsupportedOperationException | LinkageError e) {
-            // can't restart / see JENKINS-3875
-            failedToObtainArgs = e;
-        }
+    @NonNull
+    private List<String> args;
+
+    public UnixLifecycle() {
+        args = JavaVMArguments.current();
     }
 
     @Override
@@ -68,26 +67,30 @@ public class UnixLifecycle extends Lifecycle {
             if (jenkins != null) {
                 jenkins.cleanUp();
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             LOGGER.log(Level.SEVERE, "Failed to clean up. Restart will continue.", e);
         }
 
         // close all files upon exec, except stdin, stdout, and stderr
         int sz = LIBC.getdtablesize();
-        for(int i=3; i<sz; i++) {
+        for (int i = 3; i < sz; i++) {
             int flags = LIBC.fcntl(i, F_GETFD);
-            if(flags<0) continue;
-            LIBC.fcntl(i, F_SETFD,flags| FD_CLOEXEC);
+            if (flags < 0) continue;
+            LIBC.fcntl(i, F_SETFD, flags | FD_CLOEXEC);
         }
 
         // exec to self
         String exe = args.get(0);
         LIBC.execvp(exe, new StringArray(args.toArray(new String[0])));
-        throw new IOException("Failed to exec '"+exe+"' "+LIBC.strerror(Native.getLastError()));
+        throw new IOException("Failed to exec '" + exe + "' " + LIBC.strerror(Native.getLastError()));
     }
 
     @Override
     public void verifyRestartable() throws RestartNotSupportedException {
+        if (!Functions.isGlibcSupported()) {
+            throw new RestartNotSupportedException("Restart is not supported on platforms without libc");
+        }
+
         // see http://lists.apple.com/archives/cocoa-dev/2005/Oct/msg00836.html and
         // http://factor-language.blogspot.com/2007/07/execve-returning-enotsup-on-mac-os-x.html
         // on Mac, execv fails with ENOTSUP if the caller is multi-threaded, resulting in an error like
@@ -96,8 +99,6 @@ public class UnixLifecycle extends Lifecycle {
         // according to http://www.mail-archive.com/wine-devel@winehq.org/msg66797.html this now works on Snow Leopard
         if (Platform.isDarwin() && !Platform.isSnowLeopardOrLater())
             throw new RestartNotSupportedException("Restart is not supported on Mac OS X");
-        if (args==null)
-            throw new RestartNotSupportedException("Failed to obtain the command line arguments of the process",failedToObtainArgs);
     }
 
     private static final Logger LOGGER = Logger.getLogger(UnixLifecycle.class.getName());

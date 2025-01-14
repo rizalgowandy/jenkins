@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package jenkins.model;
 
 import hudson.Extension;
@@ -34,7 +35,7 @@ import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 
 /**
- * Run background build discarders on an individual job once a build is finalized
+ * Run build discarders on an individual job once a build is finalized
  */
 @Extension
 @Restricted(NoExternalUse.class)
@@ -45,6 +46,15 @@ public class GlobalBuildDiscarderListener extends RunListener<Run> {
     @Override
     public void onFinalized(Run run) {
         Job job = run.getParent();
-        BackgroundGlobalBuildDiscarder.processJob(new LogTaskListener(LOGGER, Level.FINE), job);
+        try {
+            // Job-level build discarder execution is unconditional.
+            job.logRotate();
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, e, () -> "Failed to rotate log for " + run);
+        }
+        // Avoid calling Job.logRotate twice in case JobGlobalBuildDiscarderStrategy is configured globally.
+        BackgroundGlobalBuildDiscarder.processJob(new LogTaskListener(LOGGER, Level.FINE), job,
+                GlobalBuildDiscarderConfiguration.get().getConfiguredBuildDiscarders().stream()
+                        .filter(s -> !(s instanceof JobGlobalBuildDiscarderStrategy)));
     }
 }

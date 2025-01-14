@@ -21,24 +21,28 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package jenkins.install;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 
-import com.gargoylesoftware.htmlunit.Page;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.FilePath;
 import hudson.model.DownloadService;
 import hudson.model.UpdateSite;
 import hudson.security.AuthorizationStrategy;
 import hudson.security.SecurityRealm;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
@@ -46,17 +50,18 @@ import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.util.HashSet;
 import java.util.Set;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import jenkins.model.Jenkins;
 import jenkins.util.JSONSignatureValidator;
-import org.apache.commons.io.FileUtils;
-import org.apache.tools.ant.filters.StringInputStream;
+import org.eclipse.jetty.http.HttpHeader;
+import org.eclipse.jetty.http.HttpStatus;
+import org.eclipse.jetty.io.Content;
+import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
-import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.eclipse.jetty.util.Callback;
+import org.htmlunit.Page;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -75,22 +80,22 @@ public class SetupWizardTest {
 
     @Rule
     public JenkinsRule j = new JenkinsRule();
-    
+
     @Rule
     public TemporaryFolder tmpdir = new TemporaryFolder();
-    
-    @Before 
+
+    @Before
     public void initSetupWizard() throws IOException, InterruptedException {
         final SetupWizard wizard = j.jenkins.getSetupWizard();
         wizard.init(true);
-        
+
         // Retrieve admin credentials
         final FilePath adminPassFile = wizard.getInitialAdminPasswordFile();
         ByteArrayOutputStream ostream = new ByteArrayOutputStream();
         adminPassFile.copyTo(ostream);
-        final String password = ostream.toString();
+        final String password = ostream.toString(StandardCharsets.UTF_8);
     }
-    
+
     @Test
     public void shouldReturnPluginListsByDefault() throws Exception {
         JenkinsRule.WebClient wc = j.createWebClient();
@@ -99,7 +104,7 @@ public class SetupWizardTest {
         j.jenkins.setAuthorizationStrategy(AuthorizationStrategy.UNSECURED);
         // wc.setCredentialsProvider(adminCredentialsProvider);
         // wc.login("admin");
-        
+
         String response = jsonRequest(wc, "setupWizard/platformPluginList");
         assertThat("Missing plugin is suggestions ", response, containsString("active-directory"));
         assertThat("Missing category is suggestions ", response, containsString("Pipelines and Continuous Delivery"));
@@ -182,11 +187,11 @@ public class SetupWizardTest {
         }
 
         public void init() throws IOException {
-            File newFile = new File(tmpdir, "platform-plugins.json");
-            FileUtils.write(newFile, "[ { "
+            Path newPath = tmpdir.toPath().resolve("platform-plugins.json");
+            Files.writeString(newPath, "[ { "
                     + "\"category\":\"Organization and Administration\", "
                     + "\"plugins\": [ { \"name\": \"antisamy-markup-formatter\" } ]"
-                    + "} ]");
+                    + "} ]", StandardCharsets.UTF_8);
         }
     }
 
@@ -200,11 +205,11 @@ public class SetupWizardTest {
         }
 
         public void init() throws IOException {
-            File newFile = new File(tmpdir, "platform-plugins.json");
-            FileUtils.write(newFile, "{ \"categories\" : [ { "
+            Path newPath = tmpdir.toPath().resolve("platform-plugins.json");
+            Files.writeString(newPath, "{ \"categories\" : [ { "
                     + "\"category\":\"Administration and Organization\", "
                     + "\"plugins\": [ { \"name\": \"dashboard-view\"} ]"
-                    + "} ] }");
+                    + "} ] }", StandardCharsets.UTF_8);
         }
     }
 
@@ -333,7 +338,7 @@ public class SetupWizardTest {
         }
     }
 
-    private static class RemoteUpdateSiteHandler extends AbstractHandler {
+    private static class RemoteUpdateSiteHandler extends Handler.Abstract {
         private String serverContext;
         private boolean includeSignature;
 
@@ -344,15 +349,18 @@ public class SetupWizardTest {
         }
 
         @Override
-        public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
-            String responseBody = getWebServerResource(target, request.getParameter("version"));
+        public boolean handle(Request request, Response response, Callback callback) throws IOException {
+            String target = request.getHttpURI().getPath();
+            String version = Request.extractQueryParameters(request).get("version").getValue();
+            String responseBody = getWebServerResource(target, version);
             if (responseBody != null) {
-                baseRequest.setHandled(true);
-                response.setContentType("text/plain; charset=utf-8");
-                response.setStatus(HttpServletResponse.SC_OK);
-                response.getOutputStream().write(responseBody.getBytes());
+                response.getHeaders().add(HttpHeader.CONTENT_TYPE, "text/plain; charset=utf-8");
+                response.setStatus(HttpStatus.OK_200);
+                Content.Sink.write(response, true, responseBody, callback);
+                return true;
             } else {
-                response.sendError(404);
+                Response.writeError(request, response, callback, HttpStatus.NOT_FOUND_404);
+                return true;
             }
         }
 
@@ -455,7 +463,7 @@ public class SetupWizardTest {
         protected Set<TrustAnchor> loadTrustAnchors(CertificateFactory cf) throws IOException {
             Set<TrustAnchor> trustAnchors = new HashSet<>();
             try {
-                Certificate certificate = cf.generateCertificate(new StringInputStream(cert));
+                Certificate certificate = cf.generateCertificate(new ByteArrayInputStream(cert.getBytes(StandardCharsets.UTF_8)));
                 trustAnchors.add(new TrustAnchor((X509Certificate) certificate, null));
             } catch (CertificateException ex) {
                 throw new IOException(ex);

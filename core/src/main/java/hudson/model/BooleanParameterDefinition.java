@@ -21,15 +21,19 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Extension;
 import java.util.Objects;
 import net.sf.json.JSONObject;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 
 /**
  * {@link ParameterDefinition} that is either 'true' or 'false'.
@@ -43,11 +47,11 @@ public class BooleanParameterDefinition extends SimpleParameterDefinition {
      * @since 2.281
      */
     @DataBoundConstructor
-    public BooleanParameterDefinition(String name) {
+    public BooleanParameterDefinition(@NonNull String name) {
         super(name);
     }
 
-    public BooleanParameterDefinition(String name, boolean defaultValue, String description) {
+    public BooleanParameterDefinition(@NonNull String name, boolean defaultValue, @CheckForNull String description) {
         this(name);
         setDefaultValue(defaultValue);
         setDescription(description);
@@ -55,8 +59,7 @@ public class BooleanParameterDefinition extends SimpleParameterDefinition {
 
     @Override
     public ParameterDefinition copyWithDefaultValue(ParameterValue defaultValue) {
-        if (defaultValue instanceof BooleanParameterValue) {
-            BooleanParameterValue value = (BooleanParameterValue) defaultValue;
+        if (defaultValue instanceof BooleanParameterValue value) {
             return new BooleanParameterDefinition(getName(), value.value, getDescription());
         } else {
             return this;
@@ -76,7 +79,7 @@ public class BooleanParameterDefinition extends SimpleParameterDefinition {
     }
 
     @Override
-    public ParameterValue createValue(StaplerRequest req, JSONObject jo) {
+    public ParameterValue createValue(StaplerRequest2 req, JSONObject jo) {
         BooleanParameterValue value = req.bindJSON(BooleanParameterValue.class, jo);
         value.setDescription(getDescription());
         return value;
@@ -84,7 +87,7 @@ public class BooleanParameterDefinition extends SimpleParameterDefinition {
 
     @Override
     public ParameterValue createValue(String value) {
-        return new BooleanParameterValue(getName(),Boolean.parseBoolean(value),getDescription());
+        return new BooleanParameterValue(getName(), Boolean.parseBoolean(value), getDescription());
     }
 
     @Override
@@ -101,6 +104,7 @@ public class BooleanParameterDefinition extends SimpleParameterDefinition {
     }
 
     @Override
+    @SuppressFBWarnings(value = "EQ_GETCLASS_AND_CLASS_CONSTANT", justification = "ParameterDefinitionTest tests that subclasses are not equal to their parent classes, so the behavior appears to be intentional")
     public boolean equals(Object obj) {
         if (BooleanParameterDefinition.class != getClass())
             return super.equals(obj);
@@ -122,6 +126,7 @@ public class BooleanParameterDefinition extends SimpleParameterDefinition {
     // to avoid picking the Java reserved word "boolean" as the primary identifier
     @Extension @Symbol("booleanParam")
     public static class DescriptorImpl extends ParameterDescriptor {
+        @NonNull
         @Override
         public String getDisplayName() {
             return Messages.BooleanParameterDefinition_DisplayName();

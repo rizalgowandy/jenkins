@@ -21,12 +21,11 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.tools;
 
 import static org.junit.Assert.assertEquals;
 
-import com.gargoylesoftware.htmlunit.html.HtmlForm;
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import hudson.EnvVars;
 import hudson.Functions;
 import hudson.model.FreeStyleProject;
@@ -37,6 +36,8 @@ import hudson.tasks.Ant.AntInstallation;
 import hudson.tasks.BatchFile;
 import hudson.tasks.Maven.MavenInstallation;
 import hudson.tasks.Shell;
+import org.htmlunit.html.HtmlForm;
+import org.htmlunit.html.HtmlPage;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -101,7 +102,7 @@ public class ToolLocationNodePropertyTest {
     }
 
     private void configureDumpEnvBuilder() {
-        if(Functions.isWindows())
+        if (Functions.isWindows())
             project.getBuildersList().add(new BatchFile("set"));
         else
             project.getBuildersList().add(new Shell("export"));

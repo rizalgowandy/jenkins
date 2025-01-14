@@ -39,7 +39,8 @@ import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.DataBoundSetter;
+import org.kohsuke.stapler.StaplerRequest2;
 
 /**
  * Configuration for update site-provided warnings.
@@ -64,13 +65,18 @@ public class UpdateSiteWarningsConfiguration extends GlobalConfiguration impleme
         return Collections.unmodifiableSet(ignoredWarnings);
     }
 
+    @DataBoundSetter // unused; for CasC support only
+    public void setIgnoredWarnings(Set<String> ignoredWarnings) {
+        this.ignoredWarnings = new HashSet<>(ignoredWarnings);
+    }
+
     public boolean isIgnored(@NonNull UpdateSite.Warning warning) {
         return ignoredWarnings.contains(warning.id);
     }
 
     @CheckForNull
     public PluginWrapper getPlugin(@NonNull UpdateSite.Warning warning) {
-        if (warning.type != UpdateSite.Warning.Type.PLUGIN) {
+        if (warning.type != UpdateSite.WarningType.PLUGIN) {
             return null;
         }
         return Jenkins.get().getPluginManager().getPlugin(warning.component);
@@ -94,7 +100,7 @@ public class UpdateSiteWarningsConfiguration extends GlobalConfiguration impleme
         Set<UpdateSite.Warning> allWarnings = getAllWarnings();
 
         HashSet<UpdateSite.Warning> applicableWarnings = new HashSet<>();
-        for (UpdateSite.Warning warning: allWarnings) {
+        for (UpdateSite.Warning warning : allWarnings) {
             if (warning.isRelevant()) {
                 applicableWarnings.add(warning);
             }
@@ -105,7 +111,7 @@ public class UpdateSiteWarningsConfiguration extends GlobalConfiguration impleme
 
 
     @Override
-    public boolean configure(StaplerRequest req, JSONObject json) throws FormException {
+    public boolean configure(StaplerRequest2 req, JSONObject json) throws FormException {
         HashSet<String> newIgnoredWarnings = new HashSet<>();
         for (Object key : json.keySet()) {
             String warningKey = key.toString();

@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package jenkins.model;
 
 import hudson.Extension;
@@ -30,6 +31,7 @@ import hudson.model.TaskListener;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 
@@ -55,13 +57,20 @@ public class BackgroundGlobalBuildDiscarder extends AsyncPeriodicWork {
         }
     }
 
+    /**
+     * Runs all globally configured build discarders against a job.
+     */
     public static void processJob(TaskListener listener, Job job) {
-        listener.getLogger().println("Processing " + job.getFullName());
-        GlobalBuildDiscarderConfiguration.get().getConfiguredBuildDiscarders().forEach(strategy -> {
+        processJob(listener, job, GlobalBuildDiscarderConfiguration.get().getConfiguredBuildDiscarders().stream());
+    }
+
+    /**
+     * Runs the specified build discarders against a job.
+     */
+    public static void processJob(TaskListener listener, Job job, Stream<GlobalBuildDiscarderStrategy> strategies) {
+        strategies.forEach(strategy -> {
             String displayName = strategy.getDescriptor().getDisplayName();
-            listener.getLogger().println("Offering " + job.getFullName() + " to " + displayName);
             if (strategy.isApplicable(job)) {
-                listener.getLogger().println(job.getFullName() + " accepted by " + displayName);
                 try {
                     strategy.apply(job);
                 } catch (Exception ex) {

@@ -4,11 +4,11 @@ import hudson.Extension;
 import hudson.Plugin;
 import hudson.PluginWrapper;
 import hudson.StructuredForm;
+import jakarta.servlet.ServletException;
 import java.io.IOException;
-import javax.servlet.ServletException;
 import net.sf.json.JSONObject;
 import org.jenkinsci.Symbol;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 
 /**
  * Include config.jelly defined for {@link Plugin}s.
@@ -18,12 +18,12 @@ import org.kohsuke.stapler.StaplerRequest;
  *
  * @author Kohsuke Kawaguchi
  */
-@Extension(ordinal=100) @Symbol("plugin") // historically this was placed above general configuration from arbitrary descriptors
+@Extension(ordinal = 100) @Symbol("plugin") // historically this was placed above general configuration from arbitrary descriptors
 public class GlobalPluginConfiguration  extends GlobalConfiguration {
     @Override
-    public boolean configure(StaplerRequest req, JSONObject json) throws FormException {
+    public boolean configure(StaplerRequest2 req, JSONObject json) throws FormException {
         try {
-            for( JSONObject o : StructuredForm.toList(json, "plugin")) {
+            for (JSONObject o : StructuredForm.toList(json, "plugin")) {
                 String pluginName = o.getString("name");
                 PluginWrapper pw = Jenkins.get().pluginManager.getPlugin(pluginName);
                 Plugin p = pw != null ? pw.getPlugin() : null;

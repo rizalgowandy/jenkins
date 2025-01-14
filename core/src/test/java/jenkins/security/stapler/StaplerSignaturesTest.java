@@ -9,8 +9,8 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.kohsuke.stapler.Function;
 import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 import org.kohsuke.stapler.json.JsonResponse;
 import org.kohsuke.stapler.lang.FieldRef;
 
@@ -40,7 +40,7 @@ public class StaplerSignaturesTest {
                 "staticMethod jenkins.security.stapler.StaplerSignaturesTest$SomeClass getFoo int",
                 "staticMethod jenkins.security.stapler.StaplerSignaturesTest$SomeClass getFoo long",
                 "method jenkins.security.stapler.StaplerSignaturesTest$SomeClass getFoo jenkins.security.stapler.StaplerSignaturesTest$SomeClass",
-                "method jenkins.security.stapler.StaplerSignaturesTest$SomeClass doFoo org.kohsuke.stapler.StaplerRequest org.kohsuke.stapler.StaplerResponse",
+                "method jenkins.security.stapler.StaplerSignaturesTest$SomeClass doFoo org.kohsuke.stapler.StaplerRequest2 org.kohsuke.stapler.StaplerResponse2",
                 "method jenkins.security.stapler.StaplerSignaturesTest$SomeClass doWhatever java.lang.String",
                 "method java.lang.Object getClass",
                 "method java.lang.Object equals java.lang.Object",
@@ -52,12 +52,19 @@ public class StaplerSignaturesTest {
                 "method java.lang.Object wait long",
                 "method java.lang.Object wait"
         ));
+
         public void getFoo() {}
+
         public void getFoo(String arg) {}
+
         public static void getFoo(int arg) {}
+
         public static void getFoo(long arg) {}
+
         public void getFoo(SomeClass arg) {}
-        public void doFoo(StaplerRequest req, StaplerResponse rsp) {}
+
+        public void doFoo(StaplerRequest2 req, StaplerResponse2 rsp) {}
+
         @StaplerDispatchable @JsonResponse
         public void doWhatever(@QueryParameter String arg) {}
 
@@ -84,7 +91,7 @@ public class StaplerSignaturesTest {
                 "staticMethod jenkins.security.stapler.StaplerSignaturesTest$SomeClass getFoo int",
                 "staticMethod jenkins.security.stapler.StaplerSignaturesTest$SomeClass getFoo long",
                 "method jenkins.security.stapler.StaplerSignaturesTest$SomeClass getFoo jenkins.security.stapler.StaplerSignaturesTest$SomeClass",
-                "method jenkins.security.stapler.StaplerSignaturesTest$SomeClass doFoo org.kohsuke.stapler.StaplerRequest org.kohsuke.stapler.StaplerResponse",
+                "method jenkins.security.stapler.StaplerSignaturesTest$SomeClass doFoo org.kohsuke.stapler.StaplerRequest2 org.kohsuke.stapler.StaplerResponse2",
                 "method jenkins.security.stapler.StaplerSignaturesTest$SomeClass doWhatever java.lang.String",
                 "method java.lang.Object getClass",
                 "method java.lang.Object equals java.lang.Object",
@@ -96,10 +103,14 @@ public class StaplerSignaturesTest {
                 "method java.lang.Object wait long",
                 "method java.lang.Object wait"
         ));
+
         @Override
         public void getFoo() {}
+
         public void subtypeExclusive(){}
+
         public void subtypeExclusive(String arg){}
+
         public void varargMethod(String... args){}
 
         static Set<String> FIELD_SIGNATURES = new HashSet<>(Arrays.asList(

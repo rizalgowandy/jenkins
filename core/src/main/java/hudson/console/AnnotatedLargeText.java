@@ -23,16 +23,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.console;
 
 import static java.lang.Math.abs;
 
-import com.jcraft.jzlib.GZIPInputStream;
-import com.jcraft.jzlib.GZIPOutputStream;
 import edu.umd.cs.findbugs.annotations.CheckReturnValue;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import hudson.Util;
 import hudson.remoting.ObjectInputStreamEx;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -43,16 +44,20 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
 import jenkins.model.Jenkins;
 import jenkins.security.CryptoConfidentialKey;
-import org.apache.commons.io.output.ByteArrayOutputStream;
+import jenkins.security.stapler.StaplerNotDispatchable;
 import org.jenkinsci.remoting.util.AnonymousClassWarnings;
 import org.kohsuke.stapler.Stapler;
 import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerResponse2;
 import org.kohsuke.stapler.framework.io.ByteBuffer;
 import org.kohsuke.stapler.framework.io.LargeText;
 
@@ -89,43 +94,92 @@ public class AnnotatedLargeText<T> extends LargeText {
         this.context = context;
     }
 
+    /**
+     * @since 2.475
+     */
+    public void doProgressiveHtml(StaplerRequest2 req, StaplerResponse2 rsp) throws IOException {
+        if (Util.isOverridden(AnnotatedLargeText.class, getClass(), "doProgressiveHtml", StaplerRequest.class, StaplerResponse.class)) {
+            doProgressiveHtml(StaplerRequest.fromStaplerRequest2(req), StaplerResponse.fromStaplerResponse2(rsp));
+        } else {
+            doProgressiveHtmlImpl(req, rsp);
+        }
+    }
+
+    /**
+     * @deprecated use {@link #doProgressiveHtml(StaplerRequest2, StaplerResponse2)}
+     */
+    @Deprecated
+    @StaplerNotDispatchable
     public void doProgressiveHtml(StaplerRequest req, StaplerResponse rsp) throws IOException {
-        req.setAttribute("html",true);
-        doProgressText(req,rsp);
+        doProgressiveHtmlImpl(StaplerRequest.toStaplerRequest2(req), StaplerResponse.toStaplerResponse2(rsp));
+    }
+
+    private void doProgressiveHtmlImpl(StaplerRequest2 req, StaplerResponse2 rsp) throws IOException {
+        req.setAttribute("html", true);
+        doProgressText(req, rsp);
     }
 
     /**
      * Aliasing what I think was a wrong name in {@link LargeText}
+     *
+     * @since 2.475
      */
+    public void doProgressiveText(StaplerRequest2 req, StaplerResponse2 rsp) throws IOException {
+        doProgressText(req, rsp);
+    }
+
+    /**
+     * @deprecated use {@link #doProgressiveText(StaplerRequest2, StaplerResponse2)}
+     */
+    @Deprecated
     public void doProgressiveText(StaplerRequest req, StaplerResponse rsp) throws IOException {
-        doProgressText(req,rsp);
+        doProgressText(req, rsp);
     }
 
     /**
      * For reusing code between text/html and text/plain, we run them both through the same code path
-     * and use this request attribute to differentiate. 
+     * and use this request attribute to differentiate.
      */
     private boolean isHtml() {
-        StaplerRequest req = Stapler.getCurrentRequest();
-        return req!=null && req.getAttribute("html")!=null;
+        StaplerRequest2 req = Stapler.getCurrentRequest2();
+        return req != null && req.getAttribute("html") != null;
     }
 
+    /**
+     * @since 2.475
+     */
     @Override
+    protected void setContentType(StaplerResponse2 rsp) {
+        if (Util.isOverridden(AnnotatedLargeText.class, getClass(), "setContentType", StaplerResponse.class)) {
+            setContentType(StaplerResponse.fromStaplerResponse2(rsp));
+        } else {
+            setContentTypeImpl(rsp);
+        }
+    }
+
+    /**
+     * @deprecated use {@link #setContentType(StaplerResponse2)}
+     */
+    @Deprecated
     protected void setContentType(StaplerResponse rsp) {
+        setContentTypeImpl(StaplerResponse.toStaplerResponse2(rsp));
+    }
+
+    private void setContentTypeImpl(StaplerResponse2 rsp) {
         rsp.setContentType(isHtml() ? "text/html;charset=UTF-8" : "text/plain;charset=UTF-8");
     }
 
-    private ConsoleAnnotator<T> createAnnotator(StaplerRequest req) throws IOException {
+    private ConsoleAnnotator<T> createAnnotator(StaplerRequest2 req) throws IOException {
         try {
-            String base64 = req!=null ? req.getHeader("X-ConsoleAnnotator") : null;
-            if (base64!=null) {
+            String base64 = req != null ? req.getHeader("X-ConsoleAnnotator") : null;
+            if (base64 != null) {
                 Cipher sym = PASSING_ANNOTATOR.decrypt();
 
                 try (ObjectInputStream ois = new ObjectInputStreamEx(new GZIPInputStream(
                         new CipherInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(base64.getBytes(StandardCharsets.UTF_8))), sym)),
                         Jenkins.get().pluginManager.uberClassLoader)) {
                     long timestamp = ois.readLong();
-                    if (TimeUnit.HOURS.toMillis(1) > abs(System.currentTimeMillis()-timestamp))
+                    if (TimeUnit.HOURS.toMillis(1) > abs(System.currentTimeMillis() - timestamp))
                         // don't deserialize something too old to prevent a replay attack
                         return getConsoleAnnotator(ois);
                 } catch (RuntimeException ex) {
@@ -150,7 +204,7 @@ public class AnnotatedLargeText<T> extends LargeText {
         if (isHtml())
             return writeHtmlTo(start, w);
         else
-            return super.writeLogTo(start,w);
+            return super.writeLogTo(start, w);
     }
 
     /**
@@ -175,23 +229,23 @@ public class AnnotatedLargeText<T> extends LargeText {
     @CheckReturnValue
     public long writeHtmlTo(long start, Writer w) throws IOException {
         ConsoleAnnotationOutputStream<T> caw = new ConsoleAnnotationOutputStream<>(
-                w, createAnnotator(Stapler.getCurrentRequest()), context, charset);
-        long r = super.writeLogTo(start,caw);
+                w, createAnnotator(Stapler.getCurrentRequest2()), context, charset);
+        long r = super.writeLogTo(start, caw);
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         Cipher sym = PASSING_ANNOTATOR.encrypt();
-        ObjectOutputStream oos = AnonymousClassWarnings.checkingObjectOutputStream(new GZIPOutputStream(new CipherOutputStream(baos,sym)));
+        ObjectOutputStream oos = AnonymousClassWarnings.checkingObjectOutputStream(new GZIPOutputStream(new CipherOutputStream(baos, sym)));
         oos.writeLong(System.currentTimeMillis()); // send timestamp to prevent a replay attack
         oos.writeObject(caw.getConsoleAnnotator());
         oos.close();
-        StaplerResponse rsp = Stapler.getCurrentResponse();
-        if (rsp!=null)
-            rsp.setHeader("X-ConsoleAnnotator", new String(Base64.getEncoder().encode(baos.toByteArray())));
+        StaplerResponse2 rsp = Stapler.getCurrentResponse2();
+        if (rsp != null)
+            rsp.setHeader("X-ConsoleAnnotator", Base64.getEncoder().encodeToString(baos.toByteArray()));
         return r;
     }
 
     /**
      * Used for sending the state of ConsoleAnnotator to the client, because we are deserializing this object later.
      */
-    private static final CryptoConfidentialKey PASSING_ANNOTATOR = new CryptoConfidentialKey(AnnotatedLargeText.class,"consoleAnnotator");
+    private static final CryptoConfidentialKey PASSING_ANNOTATOR = new CryptoConfidentialKey(AnnotatedLargeText.class, "consoleAnnotator");
 }

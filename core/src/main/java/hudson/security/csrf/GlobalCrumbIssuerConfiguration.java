@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.security.csrf;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
@@ -34,14 +35,14 @@ import net.sf.json.JSONObject;
 import org.jenkinsci.Symbol;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 
 /**
  * Show the crumb configuration to the system config page.
  *
  * @author Kohsuke Kawaguchi
  */
-@Extension(ordinal=195) @Symbol("crumb") // immediately after the security setting
+@Extension(ordinal = 195) @Symbol("crumb") // immediately after the security setting
 public class GlobalCrumbIssuerConfiguration extends GlobalConfiguration {
     @Override
     public @NonNull GlobalConfigurationCategory getCategory() {
@@ -49,7 +50,7 @@ public class GlobalCrumbIssuerConfiguration extends GlobalConfiguration {
     }
 
     @Override
-    public boolean configure(StaplerRequest req, JSONObject json) throws FormException {
+    public boolean configure(StaplerRequest2 req, JSONObject json) throws FormException {
         // for compatibility reasons, the actual value is stored in Jenkins
         Jenkins j = Jenkins.get();
 

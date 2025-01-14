@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.tasks;
 
 import static org.junit.Assert.assertEquals;
@@ -54,7 +55,6 @@ import hudson.security.Permission;
 import hudson.security.ProjectMatrixAuthorizationStrategy;
 import hudson.util.FormValidation;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +73,7 @@ import org.jvnet.hudson.test.JenkinsRule.WebClient;
 import org.jvnet.hudson.test.MockBuilder;
 import org.jvnet.hudson.test.MockQueueItemAuthenticator;
 import org.jvnet.hudson.test.TestBuilder;
+import org.springframework.security.core.Authentication;
 import org.xml.sax.SAXException;
 
 public class BuildTriggerTest {
@@ -103,28 +104,31 @@ public class BuildTriggerTest {
         j.jenkins.rebuildDependencyGraph();
 
         // First build should not trigger downstream job
-        FreeStyleBuild b = p.scheduleBuild2(0).get();
+        FreeStyleBuild b = j.buildAndAssertStatus(dontTriggerResult, p);
         assertNoDownstreamBuild(dp, b);
 
         // Next build should trigger downstream job
         p.getBuildersList().replace(new MockBuilder(triggerResult));
-        b = p.scheduleBuild2(0).get();
-        assertDownstreamBuild(dp, b);
+        b = j.buildAndAssertStatus(triggerResult, p);
+        j.assertBuildStatusSuccess(j.waitForCompletion(assertDownstreamBuild(dp, b)));
     }
 
-    private void assertNoDownstreamBuild(FreeStyleProject dp, Run<?,?> b) throws Exception {
+    private void assertNoDownstreamBuild(FreeStyleProject dp, Run<?, ?> b) throws Exception {
         for (int i = 0; i < 3; i++) {
             Thread.sleep(200);
             assertTrue("downstream build should not run!  upstream log: " + b.getLog(),
-                       !dp.isInQueue() && !dp.isBuilding() && dp.getLastBuild()==null);
+                       !dp.isInQueue() && !dp.isBuilding() && dp.getLastBuild() == null);
         }
     }
 
-    private FreeStyleBuild assertDownstreamBuild(FreeStyleProject dp, Run<?,?> b) throws Exception {
+    private FreeStyleBuild assertDownstreamBuild(FreeStyleProject dp, Run<?, ?> b) throws Exception {
         // Wait for downstream build
-        for (int i = 0; dp.getLastBuild()==null && i < 20; i++) Thread.sleep(100);
-        assertNotNull("downstream build didn't run.. upstream log: " + b.getLog(), dp.getLastBuild());
-        return dp.getLastBuild();
+        FreeStyleBuild result = null;
+        for (int i = 0; (result = dp.getLastBuild()) == null && i < 25; i++) {
+            Thread.sleep(250);
+        }
+        assertNotNull("downstream build didn't run.. upstream log: " + b.getLog(), result);
+        return result;
     }
 
     @Test
@@ -146,12 +150,12 @@ public class BuildTriggerTest {
         auth.add(Computer.BUILD, "alice");
         auth.add(Computer.BUILD, "anonymous");
         j.jenkins.setAuthorizationStrategy(auth);
-        final FreeStyleProject upstream =j. createFreeStyleProject("upstream");
-        org.acegisecurity.Authentication alice = User.getOrCreateByIdOrFullName("alice").impersonate();
-        QueueItemAuthenticatorConfiguration.get().getAuthenticators().add(new MockQueueItemAuthenticator(Collections.singletonMap("upstream", alice)));
-        Map<Permission,Set<String>> perms = new HashMap<>();
-        perms.put(Item.READ, Collections.singleton("alice"));
-        perms.put(Item.CONFIGURE, Collections.singleton("alice"));
+        final FreeStyleProject upstream = j. createFreeStyleProject("upstream");
+        Authentication alice = User.getOrCreateByIdOrFullName("alice").impersonate2();
+        QueueItemAuthenticatorConfiguration.get().getAuthenticators().add(new MockQueueItemAuthenticator().authenticate("upstream", alice));
+        Map<Permission, Set<String>> perms = new HashMap<>();
+        perms.put(Item.READ, Set.of("alice"));
+        perms.put(Item.CONFIGURE, Set.of("alice"));
         upstream.addProperty(new AuthorizationMatrixProperty(perms));
         String downstreamName = "d0wnstr3am"; // do not clash with English messages!
         FreeStyleProject downstream = j.createFreeStyleProject(downstreamName);
@@ -165,10 +169,10 @@ public class BuildTriggerTest {
         config.getButtonByCaption("Add post-build action").click(); // lib/hudson/project/config-publishers2.jelly
         page.getAnchorByText("Build other projects").click();
         HtmlTextInput childProjects = config.getInputByName("buildTrigger.childProjects");
-        childProjects.setValueAttribute(downstreamName);
+        childProjects.setValue(downstreamName);
         submit(config);
         */
-        assertEquals(Collections.singletonList(downstream), upstream.getDownstreamProjects());
+        assertEquals(List.of(downstream), upstream.getDownstreamProjects());
         // Downstream projects whose existence we are not aware of will silently not be triggered:
         assertDoCheck(alice, Messages.BuildTrigger_NoSuchProject(downstreamName, "upstream"), upstream, downstreamName);
         assertDoCheck(alice, null, null, downstreamName);
@@ -177,8 +181,8 @@ public class BuildTriggerTest {
         j.waitUntilNoActivity();
         assertNull(downstream.getLastBuild());
         // If we can see them, but not build them, that is a warning (but this is in cleanUp so the build is still considered a success):
-        Map<Permission,Set<String>> grantedPermissions = new HashMap<>();
-        grantedPermissions.put(Item.READ, Collections.singleton("alice"));
+        Map<Permission, Set<String>> grantedPermissions = new HashMap<>();
+        grantedPermissions.put(Item.READ, Set.of("alice"));
         AuthorizationMatrixProperty amp = new AuthorizationMatrixProperty(grantedPermissions);
         downstream.addProperty(amp);
         assertDoCheck(alice, Messages.BuildTrigger_you_have_no_permission_to_build_(downstreamName), upstream, downstreamName);
@@ -188,7 +192,7 @@ public class BuildTriggerTest {
         j.waitUntilNoActivity();
         assertNull(downstream.getLastBuild());
         // If we can build them, then great:
-        grantedPermissions.put(Item.BUILD, Collections.singleton("alice"));
+        grantedPermissions.put(Item.BUILD, Set.of("alice"));
         downstream.removeProperty(amp);
         amp = new AuthorizationMatrixProperty(grantedPermissions);
         downstream.addProperty(amp);
@@ -203,7 +207,7 @@ public class BuildTriggerTest {
         assertNotNull(cause);
         assertEquals(b, cause.getUpstreamRun());
         // Now if we have configured some QIA’s but they are not active on this job, we should normally fall back to running as anonymous. Which would normally have no permissions:
-        QueueItemAuthenticatorConfiguration.get().getAuthenticators().replace(new MockQueueItemAuthenticator(Collections.singletonMap("upstream", Jenkins.ANONYMOUS)));
+        QueueItemAuthenticatorConfiguration.get().getAuthenticators().replace(new MockQueueItemAuthenticator().authenticate("upstream", Jenkins.ANONYMOUS2));
         assertDoCheck(alice, Messages.BuildTrigger_you_have_no_permission_to_build_(downstreamName), upstream, downstreamName);
         assertDoCheck(alice, null, null, downstreamName);
         b = j.buildAndAssertSuccess(upstream);
@@ -211,8 +215,8 @@ public class BuildTriggerTest {
         j.waitUntilNoActivity();
         assertEquals(1, downstream.getLastBuild().number);
         // Unless we explicitly granted them:
-        grantedPermissions.put(Item.READ, Collections.singleton("anonymous"));
-        grantedPermissions.put(Item.BUILD, Collections.singleton("anonymous"));
+        grantedPermissions.put(Item.READ, Set.of("anonymous"));
+        grantedPermissions.put(Item.BUILD, Set.of("anonymous"));
         downstream.removeProperty(amp);
         amp = new AuthorizationMatrixProperty(grantedPermissions);
         downstream.addProperty(amp);
@@ -238,9 +242,10 @@ public class BuildTriggerTest {
         assertEquals(3, downstream.getLastBuild().number);
         j.buildAndAssertSuccess(simple);
     }
-    private void assertDoCheck(org.acegisecurity.Authentication auth, @CheckForNull String expectedError, AbstractProject<?, ?> project, String value) {
+
+    private void assertDoCheck(Authentication auth, @CheckForNull String expectedError, AbstractProject<?, ?> project, String value) {
         FormValidation result;
-        try (ACLContext c = ACL.as(auth)) {
+        try (ACLContext c = ACL.as2(auth)) {
             result = j.jenkins.getDescriptorByType(BuildTrigger.DescriptorImpl.class).doCheck(project, value);
         }
         if (expectedError == null) {
@@ -303,6 +308,7 @@ public class BuildTriggerTest {
 
         private static final class Dep extends Dependency {
             private static boolean block = false;
+
             private Dep(AbstractProject upstream, AbstractProject downstream) {
                 super(upstream, downstream);
             }
@@ -328,7 +334,7 @@ public class BuildTriggerTest {
 
         @Override @SuppressWarnings("rawtypes")
         public void buildDependencyGraph(AbstractProject owner, DependencyGraph graph) {
-            for (AbstractProject ch: getChildProjects(owner)) {
+            for (AbstractProject ch : getChildProjects(owner)) {
                 graph.addDependency(new Dep(owner, ch));
             }
         }

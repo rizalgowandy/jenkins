@@ -31,7 +31,7 @@ import hudson.util.DescribableList;
 import java.io.IOException;
 import net.sf.json.JSONObject;
 import org.jenkinsci.Symbol;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 
 /**
  * List of configured {@link ArtifactManagerFactory}s.
@@ -39,23 +39,23 @@ import org.kohsuke.stapler.StaplerRequest;
  */
 @Extension @Symbol("artifactManager")
 public class ArtifactManagerConfiguration extends GlobalConfiguration implements PersistentDescriptor {
-    
+
     public static @NonNull ArtifactManagerConfiguration get() {
         return GlobalConfiguration.all().getInstance(ArtifactManagerConfiguration.class);
     }
 
-    private final DescribableList<ArtifactManagerFactory,ArtifactManagerFactoryDescriptor> artifactManagerFactories = new DescribableList<>(this);
+    private final DescribableList<ArtifactManagerFactory, ArtifactManagerFactoryDescriptor> artifactManagerFactories = new DescribableList<>(this);
 
     private Object readResolve() {
         artifactManagerFactories.setOwner(this);
         return this;
     }
 
-    public DescribableList<ArtifactManagerFactory,ArtifactManagerFactoryDescriptor> getArtifactManagerFactories() {
+    public DescribableList<ArtifactManagerFactory, ArtifactManagerFactoryDescriptor> getArtifactManagerFactories() {
         return artifactManagerFactories;
     }
 
-    @Override public boolean configure(StaplerRequest req, JSONObject json) throws FormException {
+    @Override public boolean configure(StaplerRequest2 req, JSONObject json) throws FormException {
         try {
             artifactManagerFactories.rebuildHetero(req, json, ArtifactManagerFactoryDescriptor.all(), "artifactManagerFactories");
             return true;

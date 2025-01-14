@@ -25,18 +25,19 @@
 package hudson.model;
 
 import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.search.Search;
 import hudson.search.UserSearchProperty;
+import jakarta.servlet.ServletException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import javax.servlet.ServletException;
+import java.util.Locale;
 import jenkins.model.Jenkins;
-import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.HttpResponse;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 import org.kohsuke.stapler.export.Flavor;
 
 /**
@@ -68,12 +69,12 @@ public class AutoCompletionCandidates implements HttpResponse {
     }
 
     @Override
-    public void generateResponse(StaplerRequest req, StaplerResponse rsp, Object o) throws IOException, ServletException {
+    public void generateResponse(StaplerRequest2 req, StaplerResponse2 rsp, Object o) throws IOException, ServletException {
         Search.Result r = new Search.Result();
         for (String value : values) {
             r.suggestions.add(new hudson.search.Search.Item(value));
         }
-        rsp.serveExposedBean(req,r, Flavor.JSON);
+        rsp.serveExposedBean(req, r, Flavor.JSON);
     }
 
     /**
@@ -91,7 +92,7 @@ public class AutoCompletionCandidates implements HttpResponse {
      * @since 1.489
      */
     public static <T extends Item> AutoCompletionCandidates ofJobNames(final Class<T> type, final String value, @CheckForNull Item self, ItemGroup container) {
-        if (self==container)
+        if (self == container)
             container = self.getParent();
         return ofJobNames(type, value, container);
     }
@@ -108,6 +109,7 @@ public class AutoCompletionCandidates implements HttpResponse {
      *      The nearby contextual {@link ItemGroup} to resolve relative job names from.
      * @since 1.553
      */
+    @SuppressFBWarnings(value = "SBSC_USE_STRINGBUFFER_CONCATENATION", justification = "no big deal")
     public static  <T extends Item> AutoCompletionCandidates ofJobNames(final Class<T> type, final String value, ItemGroup container) {
         final AutoCompletionCandidates candidates = new AutoCompletionCandidates();
         class Visitor extends ItemVisitor {
@@ -120,7 +122,7 @@ public class AutoCompletionCandidates implements HttpResponse {
             @Override
             public void onItem(Item i) {
                 String itemName = contextualNameOf(i);
-                
+
                 //Check user's setting on whether to do case sensitive comparison, configured in user -> configure
                 //This is the same setting that is used by the global search field, should be consistent throughout
                 //the whole application.
@@ -129,7 +131,7 @@ public class AutoCompletionCandidates implements HttpResponse {
                 if ((startsWithImpl(itemName, value, caseInsensitive) || startsWithImpl(value, itemName, caseInsensitive))
                     // 'foobar' is a valid candidate if the current value is 'foo'.
                     // Also, we need to visit 'foo' if the current value is 'foo/bar'
-                 && (value.length()> itemName.length() || !itemName.substring(value.length()).contains("/"))
+                 && (value.length() > itemName.length() || !itemName.substring(value.length()).contains("/"))
                     // but 'foobar/zot' isn't if the current value is 'foo'
                     // we'll first show 'foobar' and then wait for the user to type '/' to show the rest
                  && i.hasPermission(Item.READ)
@@ -147,22 +149,22 @@ public class AutoCompletionCandidates implements HttpResponse {
             }
 
             private String contextualNameOf(Item i) {
-                if (prefix.endsWith("/") || prefix.length()==0)
-                    return prefix+i.getName();
+                if (prefix.endsWith("/") || prefix.isEmpty())
+                    return prefix + i.getName();
                 else
-                    return prefix+'/'+i.getName();
+                    return prefix + '/' + i.getName();
             }
         }
 
-        if (container==null || container==Jenkins.get()) {
+        if (container == null || container == Jenkins.get()) {
             new Visitor("").onItemGroup(Jenkins.get());
         } else {
             new Visitor("").onItemGroup(container);
             if (value.startsWith("/"))
                 new Visitor("/").onItemGroup(Jenkins.get());
 
-            for ( String p="../"; value.startsWith(p); p+="../") {
-                container = ((Item)container).getParent();
+            for (String p = "../"; value.startsWith(p); p += "../") {
+                container = ((Item) container).getParent();
                 new Visitor(p).onItemGroup(container);
             }
         }
@@ -171,6 +173,6 @@ public class AutoCompletionCandidates implements HttpResponse {
     }
 
     private static boolean startsWithImpl(String str, String prefix, boolean ignoreCase) {
-        return ignoreCase ? StringUtils.startsWithIgnoreCase(str, prefix) : str.startsWith(prefix);
+        return ignoreCase ? str.toLowerCase(Locale.ROOT).startsWith(prefix.toLowerCase(Locale.ROOT)) : str.startsWith(prefix);
     }
 }

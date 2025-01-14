@@ -1,22 +1,24 @@
 /*
  * Copyright (c) 2008-2010 Yahoo! Inc.
- * All rights reserved. 
+ * All rights reserved.
  * The copyrights to the contents of this file are licensed under the MIT License (http://www.opensource.org/licenses/mit-license.php)
  */
+
 package hudson.security.csrf;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Extension;
 import hudson.Util;
 import hudson.model.ModelObject;
 import hudson.model.PersistentDescriptor;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.servlet.ServletRequest;
-import javax.servlet.http.HttpServletRequest;
 import jenkins.model.Jenkins;
 import jenkins.security.HexStringConfidentialKey;
 import jenkins.util.SystemProperties;
@@ -25,16 +27,16 @@ import org.jenkinsci.Symbol;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.DataBoundConstructor;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 import org.springframework.security.core.Authentication;
 
 /**
  * A crumb issuing algorithm based on the request principal and the remote address.
- * 
+ *
  * @author dty
  */
 public class DefaultCrumbIssuer extends CrumbIssuer {
-    
+
     private transient MessageDigest md;
     private boolean excludeClientIPFromCrumb;
 
@@ -51,13 +53,13 @@ public class DefaultCrumbIssuer extends CrumbIssuer {
     public boolean isExcludeClientIPFromCrumb() {
         return this.excludeClientIPFromCrumb;
     }
-    
+
     private Object readResolve() {
         initializeMessageDigest();
         return this;
     }
 
-    private void initializeMessageDigest() {
+    private synchronized void initializeMessageDigest() {
         try {
             md = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
@@ -65,8 +67,9 @@ public class DefaultCrumbIssuer extends CrumbIssuer {
             LOGGER.log(Level.SEVERE, e, () -> "Cannot find SHA-256 MessageDigest implementation.");
         }
     }
-    
+
     @Override
+    @SuppressFBWarnings(value = "NM_WRONG_PACKAGE", justification = "false positive")
     protected synchronized String issueCrumb(ServletRequest request, String salt) {
         if (request instanceof HttpServletRequest) {
             if (md != null) {
@@ -83,8 +86,8 @@ public class DefaultCrumbIssuer extends CrumbIssuer {
                     buffer.append(req.getSession().getId());
                 }
 
-                md.update(buffer.toString().getBytes());
-                return Util.toHexString(md.digest(salt.getBytes()));
+                md.update(buffer.toString().getBytes(StandardCharsets.UTF_8));
+                return Util.toHexString(md.digest(salt.getBytes(StandardCharsets.US_ASCII)));
             }
         }
         return null;
@@ -109,30 +112,31 @@ public class DefaultCrumbIssuer extends CrumbIssuer {
         String defaultAddress = req.getRemoteAddr();
         String forwarded = req.getHeader(X_FORWARDED_FOR);
         if (forwarded != null) {
-	        String[] hopList = forwarded.split(",");
+            String[] hopList = forwarded.split(",");
             if (hopList.length >= 1) {
                 return hopList[0];
             }
         }
         return defaultAddress;
     }
-    
+
     @Extension @Symbol("standard")
     public static final class DescriptorImpl extends CrumbIssuerDescriptor<DefaultCrumbIssuer> implements ModelObject, PersistentDescriptor {
 
-        private static final HexStringConfidentialKey CRUMB_SALT = new HexStringConfidentialKey(Jenkins.class,"crumbSalt",16);
-        
+        private static final HexStringConfidentialKey CRUMB_SALT = new HexStringConfidentialKey(Jenkins.class, "crumbSalt", 16);
+
         public DescriptorImpl() {
             super(CRUMB_SALT.get(), SystemProperties.getString("hudson.security.csrf.requestfield", CrumbIssuer.DEFAULT_CRUMB_NAME));
         }
 
+        @NonNull
         @Override
         public String getDisplayName() {
             return Messages.DefaultCrumbIssuer_DisplayName();
         }
 
         @Override
-        public DefaultCrumbIssuer newInstance(StaplerRequest req, JSONObject formData) throws FormException {
+        public DefaultCrumbIssuer newInstance(StaplerRequest2 req, JSONObject formData) throws FormException {
             if (req == null) {
                 // This state is prohibited according to the Javadoc of the super method.
                 throw new FormException("DefaultCrumbIssuer new instance method is called for null Stapler request. "
@@ -141,6 +145,6 @@ public class DefaultCrumbIssuer extends CrumbIssuer {
             return req.bindJSON(DefaultCrumbIssuer.class, formData);
         }
     }
-    
+
     private static final Logger LOGGER = Logger.getLogger(DefaultCrumbIssuer.class.getName());
 }

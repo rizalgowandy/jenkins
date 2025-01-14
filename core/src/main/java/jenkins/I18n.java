@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package jenkins;
 
 import hudson.Extension;
@@ -31,7 +32,7 @@ import jenkins.util.ResourceBundleUtil;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.HttpResponse;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 
 /**
  * Internationalization REST (ish) API.
@@ -73,7 +74,7 @@ public class I18n implements RootAction {
      * @param request The request.
      * @return The JSON response.
      */
-    public HttpResponse doResourceBundle(StaplerRequest request) {
+    public HttpResponse doResourceBundle(StaplerRequest2 request) {
         String baseName = request.getParameter("baseName");
 
         if (baseName == null) {
@@ -107,7 +108,7 @@ public class I18n implements RootAction {
             }
 
             return HttpResponses.okJSON(ResourceBundleUtil.getBundle(baseName, locale));
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return HttpResponses.errorJSON(e.getMessage());
         }
     }

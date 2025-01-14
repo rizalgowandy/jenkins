@@ -3,6 +3,7 @@ package hudson.model;
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Extension;
 import hudson.Util;
 import hudson.util.FormValidation;
@@ -13,14 +14,13 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.sf.json.JSONObject;
-import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.Symbol;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 import org.kohsuke.stapler.export.Exported;
 
 /**
@@ -36,26 +36,26 @@ public class ChoiceParameterDefinition extends SimpleParameterDefinition {
     private /* quasi-final */ List<String> choices;
     private final String defaultValue;
 
-    public static boolean areValidChoices(String choices) {
+    public static boolean areValidChoices(@NonNull String choices) {
         String strippedChoices = choices.trim();
-        return !StringUtils.isEmpty(strippedChoices) && strippedChoices.split(CHOICES_DELIMITER).length > 0;
+        return strippedChoices != null && !strippedChoices.isEmpty() && strippedChoices.split(CHOICES_DELIMITER).length > 0;
     }
 
-    public ChoiceParameterDefinition(@NonNull String name, @NonNull String choices, String description) {
+    public ChoiceParameterDefinition(@NonNull String name, @NonNull String choices, @CheckForNull String description) {
         super(name, description);
         setChoicesText(choices);
         defaultValue = null;
     }
 
-    public ChoiceParameterDefinition(@NonNull String name, @NonNull String[] choices, String description) {
+    public ChoiceParameterDefinition(@NonNull String name, @NonNull String[] choices, @CheckForNull String description) {
         super(name, description);
         this.choices = Stream.of(choices).map(Util::fixNull).collect(Collectors.toCollection(ArrayList::new));
         defaultValue = null;
     }
 
-    private ChoiceParameterDefinition(@NonNull String name, @NonNull List<String> choices, String defaultValue, String description) {
+    private ChoiceParameterDefinition(@NonNull String name, @NonNull List<String> choices, String defaultValue, @CheckForNull String description) {
         super(name, description);
-        this.choices = choices;
+        this.choices = Util.fixNull(choices);
         this.defaultValue = defaultValue;
     }
 
@@ -110,7 +110,7 @@ public class ChoiceParameterDefinition extends SimpleParameterDefinition {
         throw new IllegalArgumentException("expected String or List, but got " + choices.getClass().getName());
     }
 
-    private void setChoicesText(String choices) {
+    private void setChoicesText(@NonNull String choices) {
         this.choices = Arrays.asList(choices.split(CHOICES_DELIMITER));
     }
 
@@ -124,6 +124,7 @@ public class ChoiceParameterDefinition extends SimpleParameterDefinition {
         }
     }
 
+    @NonNull
     @Exported
     public List<String> getChoices() {
         return choices;
@@ -151,7 +152,7 @@ public class ChoiceParameterDefinition extends SimpleParameterDefinition {
     }
 
     @Override
-    public ParameterValue createValue(StaplerRequest req, JSONObject jo) {
+    public ParameterValue createValue(StaplerRequest2 req, JSONObject jo) {
         StringParameterValue value = req.bindJSON(StringParameterValue.class, jo);
         value.setDescription(getDescription());
         checkValue(value, value.getValue());
@@ -180,6 +181,7 @@ public class ChoiceParameterDefinition extends SimpleParameterDefinition {
     }
 
     @Override
+    @SuppressFBWarnings(value = "EQ_GETCLASS_AND_CLASS_CONSTANT", justification = "ParameterDefinitionTest tests that subclasses are not equal to their parent classes, so the behavior appears to be intentional")
     public boolean equals(Object obj) {
         if (ChoiceParameterDefinition.class != getClass())
             return super.equals(obj);
@@ -199,8 +201,9 @@ public class ChoiceParameterDefinition extends SimpleParameterDefinition {
         return Objects.equals(defaultValue, other.defaultValue);
     }
 
-    @Extension @Symbol({"choice","choiceParam"})
+    @Extension @Symbol({"choice", "choiceParam"})
     public static class DescriptorImpl extends ParameterDescriptor {
+        @NonNull
         @Override
         public String getDisplayName() {
             return Messages.ChoiceParameterDefinition_DisplayName();
@@ -215,7 +218,7 @@ public class ChoiceParameterDefinition extends SimpleParameterDefinition {
         /*
          * We need this for JENKINS-26143 -- reflective creation cannot handle setChoices(Object). See that method for context.
          */
-        public ParameterDefinition newInstance(@Nullable StaplerRequest req, @NonNull JSONObject formData) throws FormException {
+        public ParameterDefinition newInstance(@Nullable StaplerRequest2 req, @NonNull JSONObject formData) throws FormException {
             String name = formData.getString("name");
             String desc = formData.getString("description");
             String choiceText = formData.getString("choices");

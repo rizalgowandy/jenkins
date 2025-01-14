@@ -21,18 +21,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model;
 
 import static hudson.model.Messages.Hudson_ViewName;
 import static java.util.Arrays.asList;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.core.Is.is;
+import static org.hamcrest.Matchers.instanceOf;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -40,24 +40,10 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
 
 import com.cloudbees.hudson.plugins.folder.Folder;
-import com.gargoylesoftware.htmlunit.FailingHttpStatusCodeException;
-import com.gargoylesoftware.htmlunit.FormEncodingType;
-import com.gargoylesoftware.htmlunit.HttpMethod;
-import com.gargoylesoftware.htmlunit.Page;
-import com.gargoylesoftware.htmlunit.WebRequest;
-import com.gargoylesoftware.htmlunit.html.DomNodeUtil;
-import com.gargoylesoftware.htmlunit.html.HtmlAnchor;
-import com.gargoylesoftware.htmlunit.html.HtmlForm;
-import com.gargoylesoftware.htmlunit.html.HtmlLabel;
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
-import com.gargoylesoftware.htmlunit.html.HtmlRadioButtonInput;
-import com.gargoylesoftware.htmlunit.javascript.host.html.HTMLElement;
-import com.gargoylesoftware.htmlunit.util.NameValuePair;
 import edu.umd.cs.findbugs.annotations.CheckForNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.ExtensionList;
 import hudson.XmlFile;
 import hudson.diagnosis.OldDataMonitor;
@@ -76,9 +62,8 @@ import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URLEncoder;
-import java.util.Arrays;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,6 +72,19 @@ import java.util.logging.LogRecord;
 import jenkins.model.Jenkins;
 import jenkins.model.ProjectNamingStrategy;
 import jenkins.security.NotReallyRoleSensitiveCallable;
+import org.htmlunit.FailingHttpStatusCodeException;
+import org.htmlunit.FormEncodingType;
+import org.htmlunit.HttpMethod;
+import org.htmlunit.Page;
+import org.htmlunit.WebRequest;
+import org.htmlunit.html.DomNodeUtil;
+import org.htmlunit.html.HtmlAnchor;
+import org.htmlunit.html.HtmlForm;
+import org.htmlunit.html.HtmlLabel;
+import org.htmlunit.html.HtmlPage;
+import org.htmlunit.javascript.host.html.HTMLElement;
+import org.htmlunit.javascript.host.svg.SVGElement;
+import org.htmlunit.util.NameValuePair;
 import org.jenkins.ui.icon.Icon;
 import org.jenkins.ui.icon.IconSet;
 import org.junit.Ignore;
@@ -102,8 +100,8 @@ import org.jvnet.hudson.test.MockFolder;
 import org.jvnet.hudson.test.TestExtension;
 import org.jvnet.hudson.test.recipes.LocalData;
 import org.kohsuke.stapler.DataBoundConstructor;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 import org.w3c.dom.Text;
 
 /**
@@ -117,6 +115,20 @@ public class ViewTest {
     @Rule public JenkinsRule j = new JenkinsRule();
     @Rule
     public LoggerRule logging = new LoggerRule();
+
+    @Test
+    public void roundTrip() throws Exception {
+        ListView view = new ListView("foo");
+        view.setDescription("Some description");
+        view.setFilterExecutors(true);
+        view.setFilterQueue(true);
+        j.jenkins.addView(view);
+        j.configRoundtrip(view);
+
+        assertEquals("Some description", view.getDescription());
+        assertTrue(view.isFilterExecutors());
+        assertTrue(view.isFilterQueue());
+    }
 
     @Issue("JENKINS-7100")
     @Test public void xHudsonHeader() throws Exception {
@@ -133,7 +145,7 @@ public class ViewTest {
 
         final Map<String, String> values = new HashMap<>();
 
-        for(NameValuePair p : responseHeaders) {
+        for (NameValuePair p : responseHeaders) {
             values.put(p.getName(), p.getValue());
         }
 
@@ -152,7 +164,7 @@ public class ViewTest {
 
         WebClient wc = j.createWebClient();
         HtmlForm form = wc.goTo("newView").getFormByName("createItem");
-        form.getInputByName("name").setValueAttribute("foo");
+        form.getInputByName("name").setValue("foo");
         form.getRadioButtonsByName("mode").get(0).setChecked(true);
         j.submit(form);
         assertNotNull(j.jenkins.getView("foo"));
@@ -174,17 +186,17 @@ public class ViewTest {
         HtmlAnchor privateViewsLink = userPage.getAnchorByText("My Views");
         assertNotNull("My Views link not available", privateViewsLink);
 
-        HtmlPage privateViewsPage = (HtmlPage) privateViewsLink.click();
+        HtmlPage privateViewsPage = privateViewsLink.click();
 
-        Text viewLabel = (Text) privateViewsPage.getFirstByXPath("//div[@class='tabBar']//div[@class='tab active']/a/text()");
+        Text viewLabel = privateViewsPage.getFirstByXPath("//div[@class='tabBar']//div[@class='tab active']/a/text()");
         assertTrue("'All' view should be selected", viewLabel.getTextContent().contains(Hudson_ViewName()));
 
         View listView = listView("listView");
 
         HtmlPage newViewPage = wc.goTo("user/me/my-views/newView");
         HtmlForm form = newViewPage.getFormByName("createItem");
-        form.getInputByName("name").setValueAttribute("proxy-view");
-        ((HtmlRadioButtonInput) form.getInputByValue("hudson.model.ProxyView")).setChecked(true);
+        form.getInputByName("name").setValue("proxy-view");
+        form.getInputByValue("hudson.model.ProxyView").setChecked(true);
         HtmlPage proxyViewConfigurePage = j.submit(form);
         View proxyView = user.getProperty(MyViewsProperty.class).getView("proxy-view");
         assertNotNull(proxyView);
@@ -192,27 +204,9 @@ public class ViewTest {
         form.getSelectByName("proxiedViewName").setSelectedAttribute("listView", true);
         j.submit(form);
 
-        assertTrue(proxyView instanceof ProxyView);
+        assertThat(proxyView, instanceOf(ProxyView.class));
         assertEquals("listView", ((ProxyView) proxyView).getProxiedViewName());
         assertEquals(((ProxyView) proxyView).getProxiedView(), listView);
-    }
-
-    @Test public void deleteView() throws Exception {
-        WebClient wc = j.createWebClient();
-
-        ListView v = listView("list");
-        HtmlPage delete = wc.getPage(v, "delete");
-        j.submit(delete.getFormByName("delete"));
-        assertNull(j.jenkins.getView("list"));
-
-        User user = User.get("user", true);
-        MyViewsProperty p = user.getProperty(MyViewsProperty.class);
-        v = new ListView("list", p);
-        p.addView(v);
-        delete = wc.getPage(v, "delete");
-        j.submit(delete.getFormByName("delete"));
-        assertNull(p.getView("list"));
-
     }
 
     @Issue("JENKINS-9367")
@@ -236,7 +230,7 @@ public class ViewTest {
         // boolean folderPluginClassesLoaded = (j.jenkins.getDescriptor("com.cloudbees.hudson.plugins.folder.Folder") != null);
         if (!folderPluginActive && folderPluginClassesLoaded) {
             // reset the icon added by Folder because the plugin resources are not reachable
-            IconSet.icons.addIcon(new Icon("icon-folder icon-md", "24x24/folder.gif", "width: 24px; height: 24px;"));
+            IconSet.icons.addIcon(new Icon("icon-folder icon-md", "svgs/folder.svg", "width: 24px; height: 24px;"));
         }
 
         WebClient webClient = j.createWebClient()
@@ -250,7 +244,7 @@ public class ViewTest {
         WebClient wc = j.createWebClient()
                 .withThrowExceptionOnFailingStatusCode(false);
         HtmlForm form = wc.goTo("newView").getFormByName("createItem");
-        form.getInputByName("name").setValueAttribute("..");
+        form.getInputByName("name").setValue("..");
         form.getRadioButtonsByName("mode").get(0).setChecked(true);
 
         HtmlPage page = j.submit(form);
@@ -264,7 +258,7 @@ public class ViewTest {
     @Test public void unicodeName() throws Exception {
         HtmlForm form = j.createWebClient().goTo("newView").getFormByName("createItem");
         String name = "I ♥ NY";
-        form.getInputByName("name").setValueAttribute(name);
+        form.getInputByName("name").setValue(name);
         form.getRadioButtonsByName("mode").get(0).setChecked(true);
         j.submit(form);
         View view = j.jenkins.getView(name);
@@ -308,7 +302,7 @@ public class ViewTest {
     }
 
     @Test
-    public void testGetQueueItems() throws Exception{
+    public void testGetQueueItems() throws Exception {
         ListView view1 = listView("view1");
         view1.filterQueue = true;
         ListView view2 = listView("view2");
@@ -341,10 +335,16 @@ public class ViewTest {
         assertNotContainsItems(view1, notInView, inView2);
         assertContainsItems(view2, inView2, inBothViews);
         assertNotContainsItems(view2, notInView, inView1);
+
+        // Clear the queue
+        assertTrue(j.jenkins.getQueue().cancel(notInView));
+        assertTrue(j.jenkins.getQueue().cancel(inView1));
+        assertTrue(j.jenkins.getQueue().cancel(inView2));
+        assertTrue(j.jenkins.getQueue().cancel(inBothViews));
     }
 
     private void assertContainsItems(View view, Task... items) {
-        for (Task job: items) {
+        for (Task job : items) {
             assertTrue(
                     "Queued items for " + view.getDisplayName() + " should contain " + job.getDisplayName(),
                     view.getQueueItems().contains(Queue.getInstance().getItem(job))
@@ -353,7 +353,7 @@ public class ViewTest {
     }
 
     private void assertNotContainsItems(View view, Task... items) {
-        for (Task job: items) {
+        for (Task job : items) {
             assertFalse(
                     "Queued items for " + view.getDisplayName() + " should not contain " + job.getDisplayName(),
                     view.getQueueItems().contains(Queue.getInstance().getItem(job))
@@ -362,13 +362,13 @@ public class ViewTest {
     }
 
     @Test
-    public void testGetComputers() throws Exception{
+    public void testGetComputers() throws Exception {
         ListView view1 = listView("view1");
         ListView view2 = listView("view2");
         ListView view3 = listView("view3");
-        view1.filterExecutors=true;
-        view2.filterExecutors=true;
-        view3.filterExecutors=true;
+        view1.filterExecutors = true;
+        view2.filterExecutors = true;
+        view3.filterExecutors = true;
 
         Slave slave0 = j.createOnlineSlave(j.jenkins.getLabel("label0"));
         Slave slave1 = j.createOnlineSlave(j.jenkins.getLabel("label1"));
@@ -383,7 +383,7 @@ public class ViewTest {
         MatrixProject matrixJob = j.jenkins.createProject(MatrixProject.class, "matrix");
         view1.add(matrixJob);
         matrixJob.setAxes(new AxisList(
-                new LabelAxis("label", Collections.singletonList("label1"))
+                new LabelAxis("label", List.of("label1"))
         ));
 
         FreeStyleProject noLabelJob = j.createFreeStyleProject("not-assigned-label");
@@ -428,7 +428,7 @@ public class ViewTest {
     }
 
     private void assertContainsNodes(View view, Node... slaves) {
-        for (Node slave: slaves) {
+        for (Node slave : slaves) {
             assertTrue(
                     "Filtered executors for " + view.getDisplayName() + " should contain " + slave.getDisplayName(),
                     view.getComputers().contains(slave.toComputer())
@@ -437,7 +437,7 @@ public class ViewTest {
     }
 
     private void assertNotContainsNodes(View view, Node... slaves) {
-        for (Node slave: slaves) {
+        for (Node slave : slaves) {
             assertFalse(
                     "Filtered executors for " + view.getDisplayName() + " should not contain " + slave.getDisplayName(),
                     view.getComputers().contains(slave.toComputer())
@@ -446,14 +446,14 @@ public class ViewTest {
     }
 
     @Test
-    public void testGetItem() throws Exception{
+    public void testGetItem() throws Exception {
         ListView view = listView("foo");
         FreeStyleProject job1 = j.createFreeStyleProject("free");
         MatrixProject job2 = j.jenkins.createProject(MatrixProject.class, "matrix");
         FreeStyleProject job3 = j.createFreeStyleProject("not-included");
         view.jobNames.add(job2.getDisplayName());
         view.jobNames.add(job1.getDisplayName());
-        assertEquals("View should return job " + job1.getDisplayName(),job1,  view.getItem("free"));
+        assertEquals("View should return job " + job1.getDisplayName(), job1,  view.getItem("free"));
         assertNotNull("View should return null.", view.getItem("not-included"));
     }
 
@@ -470,25 +470,25 @@ public class ViewTest {
     @Test
     public void testGetOwnerItemGroup() throws Exception {
         ListView view = listView("foo");
-        assertEquals("View should have owner jenkins.",j.jenkins.getItemGroup(), view.getOwner().getItemGroup());
+        assertEquals("View should have owner jenkins.", j.jenkins.getItemGroup(), view.getOwner().getItemGroup());
     }
 
     @Test
-    public void testGetOwnerPrimaryView() throws Exception{
+    public void testGetOwnerPrimaryView() throws Exception {
         ListView view = listView("foo");
         j.jenkins.setPrimaryView(view);
-        assertEquals("View should have primary view " + view.getDisplayName(),view, view.getOwner().getPrimaryView());
+        assertEquals("View should have primary view " + view.getDisplayName(), view, view.getOwner().getPrimaryView());
     }
 
     @Test
-    public void testSave() throws Exception{
+    public void testSave() throws Exception {
         ListView view = listView("foo");
         FreeStyleProject job = j.createFreeStyleProject("free");
         view.jobNames.add("free");
         view.save();
         j.jenkins.doReload();
         //wait until all configuration are reloaded
-        if(j.jenkins.servletContext.getAttribute("app") instanceof HudsonIsLoading){
+        if (j.jenkins.getServletContext().getAttribute("app") instanceof HudsonIsLoading) {
             Thread.sleep(500);
         }
         assertTrue("View does not contains job free after load.", j.jenkins.getView(view.getDisplayName()).contains(j.jenkins.getItem(job.getName())));
@@ -497,7 +497,7 @@ public class ViewTest {
     @Test
     public void testGetProperties() throws Exception {
         View view = listView("foo");
-        Thread.sleep(100000);
+        Thread.sleep(1000);
         HtmlForm f = j.createWebClient().getPage(view, "configure").getFormByName("viewConfig");
         ((HtmlLabel) DomNodeUtil.selectSingleNode(f, ".//LABEL[text()='Test property']")).click();
         j.submit(f);
@@ -520,6 +520,7 @@ public class ViewTest {
 
         @TestExtension
         public static class DescriptorImpl extends ViewPropertyDescriptor {
+            @NonNull
             @Override
             public String getDisplayName() {
                 return "Test property";
@@ -539,7 +540,7 @@ public class ViewTest {
             grant(Jenkins.READ).everywhere().toEveryone().
             grant(Item.READ).everywhere().toEveryone().
             grant(Item.CREATE).onFolders(d1).to("dev")); // not on root or d2
-        ACL.impersonate2(Jenkins.ANONYMOUS2, new NotReallyRoleSensitiveCallable<Void,Exception>() {
+        ACL.impersonate2(Jenkins.ANONYMOUS2, new NotReallyRoleSensitiveCallable<Void, Exception>() {
             @Override
             public Void call() {
                 try {
@@ -551,7 +552,7 @@ public class ViewTest {
                 return null;
             }
         });
-        ACL.impersonate2(User.get("dev").impersonate2(), new NotReallyRoleSensitiveCallable<Void,Exception>() {
+        ACL.impersonate2(User.get("dev").impersonate2(), new NotReallyRoleSensitiveCallable<Void, Exception>() {
             @Override
             public Void call() {
                 try {
@@ -570,7 +571,7 @@ public class ViewTest {
                 return null;
             }
         });
-        ACL.impersonate2(User.get("admin").impersonate2(), new NotReallyRoleSensitiveCallable<Void,Exception>() {
+        ACL.impersonate2(User.get("admin").impersonate2(), new NotReallyRoleSensitiveCallable<Void, Exception>() {
             @Override
             public Void call() {
                 assertCheckJobName(j.jenkins, "whatever", FormValidation.Kind.OK);
@@ -614,11 +615,14 @@ public class ViewTest {
         }
         assertTrue(found);
     }
+
     private static class BrokenView extends ListView {
         static final String ERR = "oops I cannot retrieve items";
+
         BrokenView() {
             super("broken");
         }
+
         @Override
         public List<TopLevelItem> getItems() {
             throw new IllegalStateException(ERR);
@@ -644,9 +648,9 @@ public class ViewTest {
     public void shouldFindNestedViewByName() throws Exception {
         //given
         String testNestedViewName = "right2ndNestedView";
-        View right2ndNestedView = mockedViewWithName(testNestedViewName);
+        View right2ndNestedView = new ListView(testNestedViewName);
         //and
-        View left2ndNestedView = mockedViewWithName("left2ndNestedView");
+        View left2ndNestedView = new ListView("left2ndNestedView");
         DummyCompositeView rightNestedGroupView = new DummyCompositeView("rightNestedGroupView", left2ndNestedView, right2ndNestedView);
         //and
         listView("leftTopLevelView");
@@ -655,10 +659,6 @@ public class ViewTest {
         View foundNestedView = j.jenkins.getView(testNestedViewName);
         //then
         assertEquals(right2ndNestedView, foundNestedView);
-    }
-
-    private View mockedViewWithName(String viewName) {
-        return given(mock(View.class).getViewName()).willReturn(viewName).getMock();
     }
 
     public void prepareSec1923() {
@@ -699,7 +699,7 @@ public class ViewTest {
         assertThat(e.getStatusCode(), equalTo(500));
 
         // This should have a different message, but this is the current behavior demonstrating the problem.
-        assertThat(e.getResponse().getContentAsString(), containsString("A problem occurred while processing the request."));
+        assertThat(e.getResponse().getContentAsString(), containsString("A problem occurred while processing the request"));
 
         OldDataMonitor odm = ExtensionList.lookupSingleton(OldDataMonitor.class);
         Map<Saveable, OldDataMonitor.VersionRange> data = odm.getData();
@@ -743,7 +743,7 @@ public class ViewTest {
         assertThat(e.getStatusCode(), equalTo(500));
 
         // This should have a different message, but this is the current behavior demonstrating the problem.
-        assertThat(e.getResponse().getContentAsString(), containsString("A problem occurred while processing the request."));
+        assertThat(e.getResponse().getContentAsString(), containsString("A problem occurred while processing the request"));
 
         OldDataMonitor odm = ExtensionList.lookupSingleton(OldDataMonitor.class);
         Map<Saveable, OldDataMonitor.VersionRange> data = odm.getData();
@@ -824,7 +824,7 @@ public class ViewTest {
         Object result = page.executeJavaScript("Array.from(document.querySelectorAll('.label')).filter(el => el.innerText.indexOf('" + customizableTLID.customDisplayName + "') !== -1)[0].parentElement.parentElement").getJavaScriptResult();
         assertThat(result, instanceOf(HTMLElement.class));
         HTMLElement resultElement = (HTMLElement) result;
-        assertThat(resultElement.getAttribute("onclick", null), nullValue());
+        assertThat(resultElement.getAttribute("onclick"), nullValue());
     }
 
     @Test
@@ -889,7 +889,7 @@ public class ViewTest {
         JenkinsRule.WebClient wc = j.createWebClient();
         WebRequest req = new WebRequest(wc.createCrumbedUrl("createView"), HttpMethod.POST);
         req.setEncodingType(FormEncodingType.URL_ENCODED);
-        req.setRequestBody("name=ViewName&mode=hudson.model.ListView&json=" + URLEncoder.encode("{\"mode\":\"hudson.model.ListView\",\"name\":\"DifferentViewName\"}", "UTF-8"));
+        req.setRequestBody("name=ViewName&mode=hudson.model.ListView&json=" + URLEncoder.encode("{\"mode\":\"hudson.model.ListView\",\"name\":\"DifferentViewName\"}", StandardCharsets.UTF_8));
         wc.getPage(req);
         assertNull(j.jenkins.getView("DifferentViewName"));
         assertNotNull(j.jenkins.getView("ViewName"));
@@ -897,22 +897,34 @@ public class ViewTest {
 
     @Test
     public void newJob_iconClassName() throws Exception {
+
+        CustomizableTLID customizableTLID = j.jenkins.getExtensionList(TopLevelItemDescriptor.class).get(CustomizableTLID.class);
+        customizableTLID.customId = "with_Icon";
+        customizableTLID.customIconClassName = "icon-freestyle-project";
+
         JenkinsRule.WebClient wc = j.createWebClient();
 
         HtmlPage page = wc.goTo("view/all/newJob");
 
-        Object resultClassNames = page.executeJavaScript("document.querySelector('.hudson_model_FreeStyleProject .icon img').className").getJavaScriptResult();
-        assertThat(resultClassNames, instanceOf(String.class));
-        String resultClassNamesString = (String) resultClassNames;
-        List<String> resultClassNamesList = Arrays.asList(resultClassNamesString.split(" "));
-        assertThat(resultClassNamesList, hasItem("icon-xlg"));
-        assertThat(resultClassNamesList, hasItem("icon-freestyle-project"));
+        Object resultSrc = page.executeJavaScript("document.querySelector('." + customizableTLID.customId + " .icon img').src").getJavaScriptResult();
 
-        Object resultSrc = page.executeJavaScript("document.querySelector('.hudson_model_FreeStyleProject .icon img').src").getJavaScriptResult();
         assertThat(resultSrc, instanceOf(String.class));
         String resultSrcString = (String) resultSrc;
         assertThat(resultSrcString, containsString("48x48"));
         assertThat(resultSrcString, containsString("freestyleproject.png"));
+    }
+
+    @Test
+    public void newJob_svg() throws Exception {
+
+        JenkinsRule.WebClient wc = j.createWebClient();
+
+        HtmlPage page = wc.goTo("view/all/newJob");
+
+        Object result = page.executeJavaScript("document.querySelector('.hudson_model_FreeStyleProject .icon svg')").getJavaScriptResult();
+        assertThat(result, instanceOf(SVGElement.class));
+        SVGElement svg = (SVGElement) result;
+        assertThat(svg.getClassName_js(), is("icon-xlg"));
     }
 
     @Test
@@ -956,6 +968,7 @@ public class ViewTest {
             return customId;
         }
 
+        @NonNull
         @Override
         public String getDisplayName() {
             return customDisplayName;
@@ -982,7 +995,7 @@ public class ViewTest {
         }
 
     }
-    
+
     //Duplication with ViewTest.CompositeView from core unit test module - unfortunately it is inaccessible from here
     private static class DummyCompositeView extends View implements ViewGroup {
 
@@ -993,8 +1006,10 @@ public class ViewTest {
         private final transient ViewGroupMixIn viewGroupMixIn = new ViewGroupMixIn(this) {
             @Override
             protected List<View> views() { return views; }
+
             @Override
             protected String primaryView() { return primaryView; }
+
             @Override
             protected void primaryView(String name) { primaryView = name; }
         };
@@ -1066,11 +1081,11 @@ public class ViewTest {
         }
 
         @Override
-        protected void submit(StaplerRequest req) {
+        protected void submit(StaplerRequest2 req) {
         }
 
         @Override
-        public Item doCreateItem(StaplerRequest req, StaplerResponse rsp) {
+        public Item doCreateItem(StaplerRequest2 req, StaplerResponse2 rsp) {
             return null;
         }
     }

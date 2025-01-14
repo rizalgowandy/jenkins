@@ -30,9 +30,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.StringReader;
-import org.apache.commons.io.output.NullOutputStream;
+import java.nio.charset.Charset;
 import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.Issue;
 
@@ -77,7 +78,7 @@ public class ComputerLauncherTest {
             IOException.class,
             () ->
                 ComputerLauncher.checkJavaVersion(
-                    new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM),
+                    new PrintStream(OutputStream.nullOutputStream()),
                     "-",
                     new BufferedReader(
                         new StringReader(
@@ -91,7 +92,7 @@ public class ComputerLauncherTest {
             IOException.class,
             () ->
                 ComputerLauncher.checkJavaVersion(
-                    new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM),
+                    new PrintStream(OutputStream.nullOutputStream()),
                     "-",
                     new BufferedReader(
                         new StringReader(
@@ -139,11 +140,11 @@ public class ComputerLauncherTest {
                 "OpenJDK Runtime Environment Zulu11.35+15-CA (build 11.0.5+10-LTS)\n" +
                 "OpenJDK 64-Bit Server VM Zulu11.35+15-CA (build 11.0.5+10-LTS, mixed mode)", "11.0.5");
     }
-    
+
     private static void assertChecked(String text, String spec) throws IOException {
         ByteArrayOutputStream os = new ByteArrayOutputStream();
-        ComputerLauncher.checkJavaVersion(new PrintStream(os), "bin/java", new BufferedReader(new StringReader(text)));
-        String logged = os.toString();
+        ComputerLauncher.checkJavaVersion(new PrintStream(os, false, Charset.defaultCharset()), "bin/java", new BufferedReader(new StringReader(text)));
+        String logged = os.toString(Charset.defaultCharset());
         assertTrue(logged.contains(Messages.ComputerLauncher_JavaVersionResult("bin/java", spec)), logged);
     }
 }

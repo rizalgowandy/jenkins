@@ -21,10 +21,15 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.emptyString;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -56,19 +61,19 @@ import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
 import org.kohsuke.stapler.Ancestor;
 import org.kohsuke.stapler.Stapler;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 import org.mockito.MockedStatic;
 
 public class FunctionsTest {
     @Test
-    public void testGetActionUrl_absoluteUriWithAuthority(){
+    public void testGetActionUrl_absoluteUriWithAuthority() {
         String[] uris = {
             "http://example.com/foo/bar",
             "https://example.com/foo/bar",
             "ftp://example.com/foo/bar",
             "svn+ssh://nobody@example.com/foo/bar",
         };
-        for(String uri : uris) {
+        for (String uri : uris) {
             String result = Functions.getActionUrl(null, createMockAction(uri));
             assertEquals(uri, result);
         }
@@ -76,13 +81,13 @@ public class FunctionsTest {
 
     @Test
     @Issue("JENKINS-7725")
-    public void testGetActionUrl_absoluteUriWithoutAuthority(){
+    public void testGetActionUrl_absoluteUriWithoutAuthority() {
         String[] uris = {
             "mailto:nobody@example.com",
             "mailto:nobody@example.com?subject=hello",
             "javascript:alert('hello')",
         };
-        for(String uri : uris) {
+        for (String uri : uris) {
             String result = Functions.getActionUrl(null, createMockAction(uri));
             assertEquals(uri, result);
         }
@@ -91,15 +96,15 @@ public class FunctionsTest {
     @Test
     public void testGetActionUrl_absolutePath() {
         String contextPath = "/jenkins";
-        StaplerRequest req = createMockRequest(contextPath);
+        StaplerRequest2 req = createMockRequest(contextPath);
         String[] paths = {
             "/",
             "/foo/bar",
         };
 
         try (MockedStatic<Stapler> mocked = mockStatic(Stapler.class)) {
-            mocked.when(Stapler::getCurrentRequest).thenReturn(req);
-            for(String path : paths) {
+            mocked.when(Stapler::getCurrentRequest2).thenReturn(req);
+            for (String path : paths) {
                 String result = Functions.getActionUrl(null, createMockAction(path));
                 assertEquals(contextPath + path, result);
             }
@@ -110,38 +115,38 @@ public class FunctionsTest {
     public void testGetActionUrl_relativePath() {
         String contextPath = "/jenkins";
         String itUrl = "iturl/";
-        StaplerRequest req = createMockRequest(contextPath);
+        StaplerRequest2 req = createMockRequest(contextPath);
         String[] paths = {
             "foo/bar",
             "./foo/bar",
             "../foo/bar",
         };
         try (MockedStatic<Stapler> mocked = mockStatic(Stapler.class)) {
-            mocked.when(Stapler::getCurrentRequest).thenReturn(req);
+            mocked.when(Stapler::getCurrentRequest2).thenReturn(req);
             for (String path : paths) {
                 String result = Functions.getActionUrl(itUrl, createMockAction(path));
                 assertEquals(contextPath + "/" + itUrl + path, result);
             }
         }
     }
-    
+
     @Test
     public void testGetRelativeLinkTo_JobContainedInView() {
         String contextPath = "/jenkins";
-        StaplerRequest req = createMockRequest(contextPath);
+        StaplerRequest2 req = createMockRequest(contextPath);
         try (
                 MockedStatic<Stapler> mocked = mockStatic(Stapler.class);
                 MockedStatic<Jenkins> mockedJenkins = mockStatic(Jenkins.class)
         ) {
             Jenkins j = createMockJenkins(mockedJenkins);
             ItemGroup parent = j;
-            mocked.when(Stapler::getCurrentRequest).thenReturn(req);
+            mocked.when(Stapler::getCurrentRequest2).thenReturn(req);
             View view = mock(View.class);
             when(view.getOwner()).thenReturn(j);
             when(j.getItemGroup()).thenReturn(j);
             createMockAncestors(req, createAncestor(view, "."), createAncestor(j, "../.."));
             TopLevelItem i = createMockItem(parent, "job/i/");
-            when(view.getItems()).thenReturn(Collections.singletonList(i));
+            when(view.getItems()).thenReturn(List.of(i));
             String result = Functions.getRelativeLinkTo(i);
             assertEquals("job/i/", result);
         }
@@ -150,14 +155,14 @@ public class FunctionsTest {
     @Test
     public void testGetRelativeLinkTo_JobFromComputer() {
         String contextPath = "/jenkins";
-        StaplerRequest req = createMockRequest(contextPath);
+        StaplerRequest2 req = createMockRequest(contextPath);
         try (
                 MockedStatic<Stapler> mocked = mockStatic(Stapler.class);
                 MockedStatic<Jenkins> mockedJenkins = mockStatic(Jenkins.class)
         ) {
             Jenkins j = createMockJenkins(mockedJenkins);
             ItemGroup parent = j;
-            mocked.when(Stapler::getCurrentRequest).thenReturn(req);
+            mocked.when(Stapler::getCurrentRequest2).thenReturn(req);
             Computer computer = mock(Computer.class);
             createMockAncestors(req, createAncestor(computer, "."), createAncestor(j, "../.."));
             TopLevelItem i = createMockItem(parent, "job/i/");
@@ -170,14 +175,14 @@ public class FunctionsTest {
     @Test
     public void testGetRelativeLinkTo_JobNotContainedInView() {
         String contextPath = "/jenkins";
-        StaplerRequest req = createMockRequest(contextPath);
+        StaplerRequest2 req = createMockRequest(contextPath);
         try (
                 MockedStatic<Stapler> mocked = mockStatic(Stapler.class);
                 MockedStatic<Jenkins> mockedJenkins = mockStatic(Jenkins.class)
         ) {
             Jenkins j = createMockJenkins(mockedJenkins);
             ItemGroup parent = j;
-            mocked.when(Stapler::getCurrentRequest).thenReturn(req);
+            mocked.when(Stapler::getCurrentRequest2).thenReturn(req);
             View view = mock(View.class);
             when(view.getOwner().getItemGroup()).thenReturn(parent);
             createMockAncestors(req, createAncestor(j, "../.."), createAncestor(view, "."));
@@ -187,13 +192,13 @@ public class FunctionsTest {
             assertEquals("/jenkins/job/i/", result);
         }
     }
-    
-    private interface TopLevelItemAndItemGroup <T extends TopLevelItem> extends TopLevelItem, ItemGroup<T>, ViewGroup {}
-    
+
+    private interface TopLevelItemAndItemGroup<T extends TopLevelItem> extends TopLevelItem, ItemGroup<T>, ViewGroup {}
+
     @Test
     public void testGetRelativeLinkTo_JobContainedInViewWithinItemGroup() {
         String contextPath = "/jenkins";
-        StaplerRequest req = createMockRequest(contextPath);
+        StaplerRequest2 req = createMockRequest(contextPath);
         try (
                 MockedStatic<Stapler> mocked = mockStatic(Stapler.class);
                 MockedStatic<Jenkins> mockedJenkins = mockStatic(Jenkins.class)
@@ -201,13 +206,13 @@ public class FunctionsTest {
             Jenkins j = createMockJenkins(mockedJenkins);
             TopLevelItemAndItemGroup parent = mock(TopLevelItemAndItemGroup.class);
             when(parent.getShortUrl()).thenReturn("parent/");
-            mocked.when(Stapler::getCurrentRequest).thenReturn(req);
+            mocked.when(Stapler::getCurrentRequest2).thenReturn(req);
             View view = mock(View.class);
             when(view.getOwner()).thenReturn(parent);
             when(parent.getItemGroup()).thenReturn(parent);
             createMockAncestors(req, createAncestor(j, "../../.."), createAncestor(parent, "../.."), createAncestor(view, "."));
             TopLevelItem i = createMockItem(parent, "job/i/", "parent/job/i/");
-            when(view.getItems()).thenReturn(Collections.singletonList(i));
+            when(view.getItems()).thenReturn(List.of(i));
             String result = Functions.getRelativeLinkTo(i);
             assertEquals("job/i/", result);
         }
@@ -215,13 +220,13 @@ public class FunctionsTest {
 
     @Issue("JENKINS-17713")
     @Test public void getRelativeLinkTo_MavenModules() {
-        StaplerRequest req = createMockRequest("/jenkins");
+        StaplerRequest2 req = createMockRequest("/jenkins");
         try (
                 MockedStatic<Stapler> mocked = mockStatic(Stapler.class);
                 MockedStatic<Jenkins> mockedJenkins = mockStatic(Jenkins.class)
         ) {
             Jenkins j = createMockJenkins(mockedJenkins);
-            mocked.when(Stapler::getCurrentRequest).thenReturn(req);
+            mocked.when(Stapler::getCurrentRequest2).thenReturn(req);
             TopLevelItemAndItemGroup ms = mock(TopLevelItemAndItemGroup.class);
             when(ms.getShortUrl()).thenReturn("job/ms/");
             // TODO "." (in second ancestor) is what Stapler currently fails to do. Could edit test to use ".." but set a different request path?
@@ -238,9 +243,9 @@ public class FunctionsTest {
         Item i = mock(Item.class);
         when(i.getName()).thenReturn("jobName");
         when(i.getFullDisplayName()).thenReturn("displayName");
-        assertEquals("displayName",Functions.getRelativeDisplayNameFrom(i, null));
+        assertEquals("displayName", Functions.getRelativeDisplayNameFrom(i, null));
     }
-    
+
     @Test
     public void testGetRelativeDisplayNameInsideItemGroup() {
         Item i = mock(Item.class);
@@ -261,11 +266,11 @@ public class FunctionsTest {
         assertEquals(".. » top", Functions.getRelativeDisplayNameFrom(i2, ig));
     }
 
-    private void createMockAncestors(StaplerRequest req, Ancestor... ancestors) {
+    private void createMockAncestors(StaplerRequest2 req, Ancestor... ancestors) {
         List<Ancestor> ancestorsList = Arrays.asList(ancestors);
         when(req.getAncestors()).thenReturn(ancestorsList);
     }
-    
+
     private TopLevelItem createMockItem(ItemGroup p, String shortUrl) {
         return createMockItem(p, shortUrl, shortUrl);
     }
@@ -283,7 +288,7 @@ public class FunctionsTest {
         mockedJenkins.when(Jenkins::get).thenReturn(j);
         return j;
     }
-    
+
     private static Ancestor createAncestor(Object o, String relativePath) {
         Ancestor a = mock(Ancestor.class);
         when(a.getObject()).thenReturn(o);
@@ -302,27 +307,28 @@ public class FunctionsTest {
         return action;
     }
 
-    private static StaplerRequest createMockRequest(String contextPath) {
-        StaplerRequest req = mock(StaplerRequest.class);
+    private static StaplerRequest2 createMockRequest(String contextPath) {
+        StaplerRequest2 req = mock(StaplerRequest2.class);
         when(req.getContextPath()).thenReturn(contextPath);
         return req;
     }
 
     @Test
     @Issue("JENKINS-16630")
-    public void testHumanReadableFileSize(){
+    public void testHumanReadableFileSize() {
         Locale defaultLocale = Locale.getDefault();
-        try{
+        try {
             Locale.setDefault(Locale.ENGLISH);
             assertEquals("0 B", Functions.humanReadableByteSize(0));
             assertEquals("1023 B", Functions.humanReadableByteSize(1023));
-            assertEquals("1.00 KB", Functions.humanReadableByteSize(1024));
-            assertEquals("1.50 KB", Functions.humanReadableByteSize(1536));
-            assertEquals("20.00 KB", Functions.humanReadableByteSize(20480));
-            assertEquals("1023.00 KB", Functions.humanReadableByteSize(1047552));
-            assertEquals("1.00 MB", Functions.humanReadableByteSize(1048576));
-            assertEquals("1.50 GB", Functions.humanReadableByteSize(1610612700));
-        }finally{
+            assertEquals("1.00 KiB", Functions.humanReadableByteSize(1024));
+            assertEquals("1.50 KiB", Functions.humanReadableByteSize(1536));
+            assertEquals("20.00 KiB", Functions.humanReadableByteSize(20480));
+            assertEquals("1023.00 KiB", Functions.humanReadableByteSize(1047552));
+            assertEquals("1.00 MiB", Functions.humanReadableByteSize(1048576));
+            assertEquals("1.50 GiB", Functions.humanReadableByteSize(1610612700));
+            assertEquals("1.50 TiB", Functions.humanReadableByteSize(1649267441664L));
+        } finally {
             Locale.setDefault(defaultLocale);
         }
     }
@@ -361,6 +367,46 @@ public class FunctionsTest {
         LogRecord lr = new LogRecord(Level.INFO, "Bad input <xml/>");
         lr.setLoggerName("test");
         assertEquals("Bad input &lt;xml/&gt;\n", Functions.printLogRecordHtml(lr, null)[3]);
+    }
+
+    @Test public void printLogRecordHtmlNoLogger() {
+        LogRecord lr = new LogRecord(Level.INFO, "<discarded/>");
+        assertEquals("&lt;discarded/&gt;\n", Functions.printLogRecordHtml(lr, null)[3]);
+    }
+
+    @Test
+    public void extractPluginNameFromIconSrcHandlesNull() {
+        String result = Functions.extractPluginNameFromIconSrc(null);
+
+        assertThat(result, is(emptyString()));
+    }
+
+    @Test
+    public void extractPluginNameFromIconSrcHandlesEmptyString() {
+        String result = Functions.extractPluginNameFromIconSrc("");
+
+        assertThat(result, is(emptyString()));
+    }
+
+    @Test
+    public void extractPluginNameFromIconSrcOnlyReturnsPluginFromStart() {
+        String result = Functions.extractPluginNameFromIconSrc("symbol-plugin-mailer plugin-design-library");
+
+        assertThat(result, is(equalTo("design-library")));
+    }
+
+    @Test
+    public void extractPluginNameFromIconSrcExtractsPlugin() {
+        String result = Functions.extractPluginNameFromIconSrc("symbol-padlock plugin-design-library");
+
+        assertThat(result, is(equalTo("design-library")));
+    }
+
+    @Test
+    public void extractPluginNameFromIconSrcWhichContainsPluginWordInThePluginName() {
+        String result = Functions.extractPluginNameFromIconSrc("symbol-padlock plugin-design-library-plugin");
+
+        assertThat(result, is(equalTo("design-library-plugin")));
     }
 
     @Issue("JDK-6507809")
@@ -428,7 +474,7 @@ public class FunctionsTest {
         StackTraceElement[] combined = new StackTraceElement[original.length + 1 + callSite.length];
         System.arraycopy(original, 0, combined, 0, original.length);
         combined[original.length] = new StackTraceElement(".....", "remote call", null, -2);
-        System.arraycopy(callSite,0,combined,original.length+1,callSite.length);
+        System.arraycopy(callSite, 0, combined, original.length + 1, callSite.length);
         t.setStackTrace(combined);
         assertPrintThrowable(t,
             "remote.Exception: oops\n" +
@@ -450,7 +496,7 @@ public class FunctionsTest {
         combined = new StackTraceElement[original.length + 1 + callSite.length];
         System.arraycopy(original, 0, combined, 0, original.length);
         combined[original.length] = new StackTraceElement(".....", "remote call", null, -2);
-        System.arraycopy(callSite,0,combined,original.length+1,callSite.length);
+        System.arraycopy(callSite, 0, combined, original.length + 1, callSite.length);
         t.setStackTrace(combined);
         assertPrintThrowable(t,
             "remote.Wrapper: remote.Exception: oops\n" +
@@ -554,13 +600,15 @@ public class FunctionsTest {
                             "\tat p.C.method1(C.java:17)\n");
         }
     }
+
     private static VersionNumber getVersion() {
         String version = System.getProperty("java.version");
-        if(version.startsWith("1.")) {
+        if (version.startsWith("1.")) {
             version = version.substring(2).replace("_", ".");
         }
         return new VersionNumber(version);
     }
+
     private static void assertPrintThrowable(Throwable t, String traditional, String custom) {
         StringWriter sw = new StringWriter();
         t.printStackTrace(new PrintWriter(sw));
@@ -569,9 +617,11 @@ public class FunctionsTest {
         System.out.println(actual);
         assertThat(actual.replace(System.lineSeparator(), "\n"), is(custom));
     }
+
     private static final class Stack extends Throwable {
         private static final Pattern LINE = Pattern.compile("(.+)[.](.+)[.](.+):(\\d+)");
         private final String toString;
+
         Stack(String toString, String... stack) {
             this.toString = toString;
             StackTraceElement[] lines = new StackTraceElement[stack.length];
@@ -582,18 +632,74 @@ public class FunctionsTest {
             }
             setStackTrace(lines);
         }
+
         @Override
         public String toString() {
             return toString;
         }
+
         synchronized Stack cause(Throwable cause) {
             return (Stack) initCause(cause);
         }
+
         synchronized Stack suppressed(Throwable... suppressed) {
             for (Throwable t : suppressed) {
                 addSuppressed(t);
             }
             return this;
         }
+    }
+
+    @Test
+    public void tryGetIcon_shouldReturnNullForNull() throws Exception {
+        assertThat(Functions.tryGetIcon(null), is(nullValue()));
+    }
+
+    @Test
+    public void tryGetIcon_shouldReturnNullForSymbol() throws Exception {
+        assertThat(Functions.tryGetIcon("symbol-search"), is(nullValue()));
+    }
+
+    @Test
+    public void tryGetIcon_shouldReturnMetadataForExactSpec() throws Exception {
+        assertThat(Functions.tryGetIcon("icon-help icon-sm"), is(not(nullValue())));
+    }
+
+    @Test
+    public void tryGetIcon_shouldReturnMetadataForExtraSpec() throws Exception {
+        assertThat(Functions.tryGetIcon("icon-help icon-sm extra-class"), is(not(nullValue())));
+    }
+
+    @Test
+    public void tryGetIcon_shouldReturnMetadataForFilename() throws Exception {
+        assertThat(Functions.tryGetIcon("help.svg"), is(not(nullValue())));
+    }
+
+    @Test
+    public void tryGetIcon_shouldReturnMetadataForUrl() throws Exception {
+        assertThat(Functions.tryGetIcon("48x48/green.gif"), is(not(nullValue())));
+    }
+
+    @Test
+    public void tryGetIcon_shouldReturnNullForUnknown() throws Exception {
+        assertThat(Functions.tryGetIcon("icon-nosuchicon"), is(nullValue()));
+    }
+
+    @Test
+    public void guessIcon() throws Exception {
+        Jenkins.RESOURCE_PATH = "/static/12345678";
+        assertEquals("/jenkins/static/12345678/images/48x48/green.gif", Functions.guessIcon("jenkins/images/48x48/green.gif", "/jenkins"));
+        assertEquals("/jenkins/static/12345678/images/48x48/green.gif", Functions.guessIcon("/jenkins/images/48x48/green.gif", "/jenkins"));
+        assertEquals("/static/12345678/images/48x48/green.gif", Functions.guessIcon("images/48x48/green.gif", ""));
+        assertEquals("/jenkins/static/12345678/images/48x48/green.gif", Functions.guessIcon("images/48x48/green.gif", "/jenkins"));
+        assertEquals("/jenkins/static/12345678/images/48x48/green.gif", Functions.guessIcon("/images/48x48/green.gif", "/jenkins"));
+        assertEquals("/images/static/12345678/images/48x48/green.gif", Functions.guessIcon("/images/48x48/green.gif", "/images"));
+        assertEquals("/static/12345678/plugin/myartifactId/images/48x48/green.gif", Functions.guessIcon("/plugin/myartifactId/images/48x48/green.gif", ""));
+        assertEquals("/jenkins/static/12345678/plugin/myartifactId/images/48x48/green.gif", Functions.guessIcon("/plugin/myartifactId/images/48x48/green.gif", "/jenkins"));
+        assertEquals("/jenkins/static/12345678/plugin/myartifactId/images/48x48/green.gif", Functions.guessIcon("/jenkins/plugin/myartifactId/images/48x48/green.gif", "/jenkins"));
+        assertEquals("/plugin/static/12345678/plugin/myartifactId/images/48x48/green.gif", Functions.guessIcon("/plugin/myartifactId/images/48x48/green.gif", "/plugin"));
+        assertEquals("/plugin/static/12345678/plugin/myartifactId/images/48x48/green.gif", Functions.guessIcon("/plugin/plugin/myartifactId/images/48x48/green.gif", "/plugin"));
+        assertEquals("http://acme.com/icon.svg", Functions.guessIcon("http://acme.com/icon.svg", "/jenkins"));
+        assertEquals("https://acme.com/icon.svg", Functions.guessIcon("https://acme.com/icon.svg", "/jenkins"));
     }
 }
