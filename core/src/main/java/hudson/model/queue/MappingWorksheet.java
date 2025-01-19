@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model.queue;
 
 import static java.lang.Math.max;
@@ -46,6 +47,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 
 /**
  * Defines a mapping problem for answering "where do we execute this task?"
@@ -84,6 +86,9 @@ import java.util.Map;
  * @author Kohsuke Kawaguchi
  */
 public class MappingWorksheet {
+
+    private static final Logger LOGGER = Logger.getLogger(MappingWorksheet.class.getName());
+
     public final List<ExecutorChunk> executors;
     public final List<WorkChunk> works;
     /**
@@ -128,14 +133,16 @@ public class MappingWorksheet {
          * Is this executor chunk and the given work chunk compatible? Can the latter be run on the former?
          */
         public boolean canAccept(WorkChunk c) {
-            if (this.size()<c.size())
+            if (this.size() < c.size())
                 return false;   // too small compared towork
 
-            if (c.assignedLabel!=null && !c.assignedLabel.contains(node))
+            if (c.assignedLabel != null && !c.assignedLabel.contains(node))
                 return false;   // label mismatch
 
-            if (!(Node.SKIP_BUILD_CHECK_ON_FLYWEIGHTS && item.task instanceof Queue.FlyweightTask) && !nodeAcl.hasPermission2(item.authenticate2(), Computer.BUILD))
-                return false;   // tasks don't have a permission to run on this node
+            if (!(Node.SKIP_BUILD_CHECK_ON_FLYWEIGHTS && item.task instanceof Queue.FlyweightTask) && !nodeAcl.hasPermission2(item.authenticate2(), Computer.BUILD)) {
+                LOGGER.fine(() -> "Agent/Build permission denied to " + item.authenticate2().getName() + " on " + node.getNodeName());
+                return false;
+            }
 
             return true;
         }
@@ -183,7 +190,9 @@ public class MappingWorksheet {
          * If the previous execution of this task run on a certain node
          * and this task prefers to run on the same node, return that.
          * Otherwise null.
+         * @deprecated Unused.
          */
+        @Deprecated
         public final ExecutorChunk lastBuiltOn;
 
 
@@ -193,9 +202,10 @@ public class MappingWorksheet {
             this.index = index;
             this.assignedLabel = getAssignedLabel(base.get(0));
 
+            @SuppressWarnings("deprecation")
             Node lbo = base.get(0).getLastBuiltOn();
             for (ExecutorChunk ec : executors) {
-                if (ec.node==lbo) {
+                if (ec.node == lbo) {
                     lastBuiltOn = ec;
                     return;
                 }
@@ -206,7 +216,7 @@ public class MappingWorksheet {
         private Label getAssignedLabel(SubTask task) {
             for (LabelAssignmentAction laa : item.getActions(LabelAssignmentAction.class)) {
                 Label l = laa.getAssignedLabel(task);
-                if (l!=null)    return l;
+                if (l != null)    return l;
             }
             return task.getAssignedLabel();
         }
@@ -263,10 +273,10 @@ public class MappingWorksheet {
         /**
          * Returns the assignment as a map.
          */
-        public Map<WorkChunk,ExecutorChunk> toMap() {
-            Map<WorkChunk,ExecutorChunk> r = new HashMap<>();
-            for (int i=0; i<size(); i++)
-                r.put(get(i),assigned(i));
+        public Map<WorkChunk, ExecutorChunk> toMap() {
+            Map<WorkChunk, ExecutorChunk> r = new HashMap<>();
+            for (int i = 0; i < size(); i++)
+                r.put(get(i), assigned(i));
             return r;
         }
 
@@ -275,9 +285,9 @@ public class MappingWorksheet {
          */
         public boolean isPartiallyValid() {
             int[] used = new int[executors.size()];
-            for (int i=0; i<mapping.length; i++) {
+            for (int i = 0; i < mapping.length; i++) {
                 ExecutorChunk ec = mapping[i];
-                if (ec==null)   continue;
+                if (ec == null)   continue;
                 if (!ec.canAccept(works(i)))
                     return false;   // invalid assignment
                 if ((used[ec.index] += works(i).size()) > ec.capacity())
@@ -291,7 +301,7 @@ public class MappingWorksheet {
          */
         public boolean isCompletelyValid() {
             for (ExecutorChunk ec : mapping)
-                if (ec==null)   return false;   // unassigned
+                if (ec == null)   return false;   // unassigned
             return isPartiallyValid();
         }
 
@@ -303,27 +313,27 @@ public class MappingWorksheet {
             if (!isCompletelyValid())
                 throw new IllegalStateException();
 
-            for (int i=0; i<size(); i++)
-                assigned(i).execute(get(i),wuc);
+            for (int i = 0; i < size(); i++)
+                assigned(i).execute(get(i), wuc);
         }
     }
 
     public MappingWorksheet(BuildableItem item, List<? extends ExecutorSlot> offers) {
-        this(item,offers,LoadPredictor.all());
+        this(item, offers, LoadPredictor.all());
     }
 
     public MappingWorksheet(BuildableItem item, List<? extends ExecutorSlot> offers, Collection<? extends LoadPredictor> loadPredictors) {
         this.item = item;
-        
+
         // group executors by their computers
-        Map<Computer,List<ExecutorSlot>> j = new HashMap<>();
+        Map<Computer, List<ExecutorSlot>> j = new HashMap<>();
         for (ExecutorSlot o : offers) {
             Computer c = o.getExecutor().getOwner();
             List<ExecutorSlot> l = j.computeIfAbsent(c, k -> new ArrayList<>());
             l.add(o);
         }
 
-        {// take load prediction into account and reduce the available executor pool size accordingly
+        { // take load prediction into account and reduce the available executor pool size accordingly
             long duration = item.task.getEstimatedDuration();
             if (duration > 0) {
                 long now = System.currentTimeMillis();
@@ -336,20 +346,20 @@ public class MappingWorksheet {
                     int peak = 0;
                     OUTER:
                     for (LoadPredictor lp : loadPredictors) {
-                        for (FutureLoad fl : Iterables.limit(lp.predict(this,e.getKey(), now, now + duration),100)) {
-                            peak = max(peak,timeline.insert(fl.startTime, fl.startTime+fl.duration, fl.numExecutors));
-                            if (peak>=max)  break OUTER;
+                        for (FutureLoad fl : Iterables.limit(lp.predict(this, e.getKey(), now, now + duration), 100)) {
+                            peak = max(peak, timeline.insert(fl.startTime, fl.startTime + fl.duration, fl.numExecutors));
+                            if (peak >= max)  break OUTER;
                         }
                     }
 
-                    int minIdle = max-peak; // minimum number of idle nodes during this time period
+                    int minIdle = max - peak; // minimum number of idle nodes during this time period
                     // total predicted load could exceed available executors [JENKINS-8882]
-                    if (minIdle<0) {
+                    if (minIdle < 0) {
                         // Should we toss a warning/info message?
                         minIdle = 0;
                     }
-                    if (minIdle<list.size())
-                        e.setValue(list.subList(0,minIdle));
+                    if (minIdle < list.size())
+                        e.setValue(list.subList(0, minIdle));
                 }
             }
         }
@@ -359,16 +369,16 @@ public class MappingWorksheet {
         for (List<ExecutorSlot> group : j.values()) {
             if (group.isEmpty())    continue;   // evict empty group
             ExecutorChunk ec = new ExecutorChunk(group, executors.size());
-            if (ec.node==null)  continue;   // evict out of sync node
+            if (ec.node == null)  continue;   // evict out of sync node
             executors.add(ec);
         }
         this.executors = Collections.unmodifiableList(executors);
 
         // group execution units into chunks. use of LinkedHashMap ensures that the main work comes at the top
-        Map<Object,List<SubTask>> m = new LinkedHashMap<>();
+        Map<Object, List<SubTask>> m = new LinkedHashMap<>();
         for (SubTask meu : item.task.getSubTasks()) {
             Object c = meu.getSameNodeConstraint();
-            if (c==null)    c = new Object();
+            if (c == null)    c = new Object();
 
             List<SubTask> l = m.computeIfAbsent(c, k -> new ArrayList<>());
             l.add(meu);
@@ -377,7 +387,7 @@ public class MappingWorksheet {
         // build into the final shape
         List<WorkChunk> works = new ArrayList<>();
         for (List<SubTask> group : m.values()) {
-            works.add(new WorkChunk(group,works.size()));
+            works.add(new WorkChunk(group, works.size()));
         }
         this.works = Collections.unmodifiableList(works);
     }

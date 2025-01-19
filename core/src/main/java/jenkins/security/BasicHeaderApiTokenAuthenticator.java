@@ -4,10 +4,10 @@ import static java.util.logging.Level.WARNING;
 
 import hudson.Extension;
 import hudson.model.User;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.logging.Logger;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.springframework.security.core.Authentication;
@@ -30,7 +30,7 @@ public class BasicHeaderApiTokenAuthenticator extends BasicHeaderAuthenticator {
     @Override
     public Authentication authenticate2(HttpServletRequest req, HttpServletResponse rsp, String username, String password) throws ServletException {
         User u = BasicApiTokenHelper.isConnectingUsingApiToken(username, password);
-        if(u != null) {
+        if (u != null) {
             Authentication auth;
             try {
                 UserDetails userDetails = u.getUserDetailsForImpersonation2();

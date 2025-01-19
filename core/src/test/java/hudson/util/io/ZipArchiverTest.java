@@ -2,14 +2,21 @@ package hudson.util.io;
 
 import static org.junit.Assert.assertEquals;
 
+import hudson.FilePath;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
 import org.junit.Assume;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -71,13 +78,29 @@ public class ZipArchiverTest {
             ZipEntry zipEntry = zipFileVerify.entries().nextElement();
             assertEquals("huge64bitFileTest.txt", zipEntry.getName());
             assertEquals(length, zipEntry.getSize());
-        } catch (ZipException e) {
-            if (e.getMessage().contains("invalid CEN header (bad signature)")) {
-                // Probably running on OpenJDK 8 and hitting JDK-8186464
-                Assume.assumeNoException(e);
-            } else {
-                throw e;
+        }
+    }
+
+    @Ignore("TODO fails to add empty directories to archive")
+    @Issue("JENKINS-49296")
+    @Test
+    public void emptyDirectory() throws Exception {
+        Path zip = tmp.newFile("test.zip").toPath();
+        Path root = tmp.newFolder().toPath();
+        Files.createDirectory(root.resolve("foo"));
+        Files.createDirectory(root.resolve("bar"));
+        Files.writeString(root.resolve("bar/file.txt"), "foobar", StandardCharsets.UTF_8);
+        try (OutputStream out = Files.newOutputStream(zip)) {
+            new FilePath(root.toFile()).zip(out, "**");
+        }
+        Set<String> names = new HashSet<>();
+        try (InputStream is = Files.newInputStream(zip);
+             ZipInputStream zis = new ZipInputStream(is, StandardCharsets.UTF_8)) {
+            ZipEntry ze;
+            while ((ze = zis.getNextEntry()) != null) {
+                names.add(ze.getName());
             }
         }
+        assertEquals(Set.of("foo/", "bar/", "bar/file.txt"), names);
     }
 }

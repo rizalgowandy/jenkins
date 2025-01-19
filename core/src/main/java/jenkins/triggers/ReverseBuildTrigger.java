@@ -66,7 +66,6 @@ import java.util.logging.Logger;
 import jenkins.model.DependencyDeclarer;
 import jenkins.model.Jenkins;
 import jenkins.model.ParameterizedJobMixIn;
-import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
@@ -110,7 +109,7 @@ public final class ReverseBuildTrigger extends Trigger<Job> implements Dependenc
 
     /**
      * Gets the upstream projects.
-     * 
+     *
      * @return Upstream projects or empty("") if upstream projects is null.
      */
     public String getUpstreamProjects() {
@@ -155,7 +154,7 @@ public final class ReverseBuildTrigger extends Trigger<Job> implements Dependenc
             // Fails because of missing Item.READ but downstream user has Item.DISCOVER
         }
 
-        if(authUpstream != upstream) {
+        if (authUpstream != upstream) {
             if (downstreamVisible) {
                 // TODO ModelHyperlink
                 listener.getLogger().println(Messages.ReverseBuildTrigger_running_as_cannot_even_see_for_trigger_f(auth.getName(),
@@ -193,6 +192,7 @@ public final class ReverseBuildTrigger extends Trigger<Job> implements Dependenc
     @Extension @Symbol("upstream")
     public static final class DescriptorImpl extends TriggerDescriptor {
 
+        @NonNull
         @Override public String getDisplayName() {
             return Messages.ReverseBuildTrigger_build_after_other_projects_are_built();
         }
@@ -209,11 +209,11 @@ public final class ReverseBuildTrigger extends Trigger<Job> implements Dependenc
             if (!project.hasPermission(Item.CONFIGURE)) {
                 return FormValidation.ok();
             }
-            StringTokenizer tokens = new StringTokenizer(Util.fixNull(value),",");
+            StringTokenizer tokens = new StringTokenizer(Util.fixNull(value), ",");
             boolean hasProjects = false;
-            while(tokens.hasMoreTokens()) {
+            while (tokens.hasMoreTokens()) {
                 String projectName = tokens.nextToken().trim();
-                if (StringUtils.isNotBlank(projectName)) {
+                if (projectName != null && !projectName.isBlank()) {
                     Job item = Jenkins.get().getItem(projectName, project, Job.class);
                     if (item == null) {
                         Job nearest = Items.findNearest(Job.class, projectName, project.getParent());
@@ -238,13 +238,13 @@ public final class ReverseBuildTrigger extends Trigger<Job> implements Dependenc
             return ExtensionList.lookupSingleton(RunListenerImpl.class);
         }
 
-        private Map<Job,Collection<ReverseBuildTrigger>> upstream2Trigger;
+        private Map<Job, Collection<ReverseBuildTrigger>> upstream2Trigger;
 
         synchronized void invalidateCache() {
             upstream2Trigger = null;
         }
 
-        private Map<Job,Collection<ReverseBuildTrigger>> calculateCache() {
+        private Map<Job, Collection<ReverseBuildTrigger>> calculateCache() {
             try (ACLContext acl = ACL.as2(ACL.SYSTEM2)) {
                 final Map<Job, Collection<ReverseBuildTrigger>> result = new WeakHashMap<>();
                 for (Job<?, ?> downstream : Jenkins.get().allItems(Job.class)) {

@@ -21,10 +21,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.console;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.MarkupText;
+import hudson.Util;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -50,7 +53,8 @@ public class ExpandableDetailsNote extends ConsoleNote {
     @Override
     public ConsoleAnnotator annotate(Object context, MarkupText text, int charPos) {
         text.addMarkup(charPos,
-                "<input type=button value='"+caption+"' class='reveal-expandable-detail'><div class='expandable-detail'>"+html+"</div>");
+                "<button type='button' class='jenkins-button reveal-expandable-detail'>"
+                        + Util.xmlEscape(caption) + "</button><div class='expandable-detail'>" + html + "</div>");
         return null;
     }
 
@@ -59,13 +63,14 @@ public class ExpandableDetailsNote extends ConsoleNote {
             return new ExpandableDetailsNote(buttonCaption, html).encode();
         } catch (IOException e) {
             // impossible, but don't make this a fatal problem
-            LOGGER.log(Level.WARNING, "Failed to serialize "+HyperlinkNote.class,e);
+            LOGGER.log(Level.WARNING, "Failed to serialize " + HyperlinkNote.class, e);
             return "";
         }
     }
 
     @Extension
     public static final class DescriptorImpl extends ConsoleAnnotationDescriptor {
+        @NonNull
         @Override
         public String getDisplayName() {
             return "Expandable details";

@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -58,7 +59,6 @@ import org.apache.commons.io.IOUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
-import org.jvnet.hudson.test.TestPluginManager;
 
 /**
  * @author Kohsuke Kawaguchi
@@ -73,8 +73,6 @@ public class UsageStatisticsTest {
      */
     @Test
     public void roundtrip() throws Exception {
-        ((TestPluginManager) j.jenkins.pluginManager).installDetachedPlugin("matrix-auth");
-
         j.createOnlineSlave();
         warmUpNodeMonitorCache();
 
@@ -107,18 +105,18 @@ public class UsageStatisticsTest {
         String data = new UsageStatistics(publicKey).getStatData();
 
         KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-        RSAPrivateKey priv = (RSAPrivateKey)keyFactory.generatePrivate(new PKCS8EncodedKeySpec(Util.fromHexString(privateKey)));
+        RSAPrivateKey priv = (RSAPrivateKey) keyFactory.generatePrivate(new PKCS8EncodedKeySpec(Util.fromHexString(privateKey)));
 
         byte[] cipherText = Base64.getDecoder().decode(data.getBytes(StandardCharsets.UTF_8));
         InputStreamReader r = new InputStreamReader(new GZIPInputStream(
-                new CombinedCipherInputStream(new ByteArrayInputStream(cipherText),priv,"AES")), StandardCharsets.UTF_8);
+                new CombinedCipherInputStream(new ByteArrayInputStream(cipherText), priv, "AES")), StandardCharsets.UTF_8);
         JSONObject o = JSONObject.fromObject(IOUtils.toString(r));
         Jenkins jenkins = j.jenkins;
         // A bit intrusive with UsageStatistics internals, but done to prevent undetected changes
         // that would cause issues with parsing/analyzing uploaded usage statistics
         assertEquals(1, o.getInt("stat"));
         assertEquals(jenkins.getLegacyInstanceId(), o.getString("install"));
-        assertEquals(jenkins.servletContext.getServerInfo(), o.getString("servletContainer"));
+        assertEquals(jenkins.getServletContext().getServerInfo(), o.getString("servletContainer"));
         assertEquals(Jenkins.VERSION, o.getString("version"));
 
         assertTrue(o.has("plugins"));
@@ -131,7 +129,7 @@ public class UsageStatisticsTest {
         keys.add("name");
         keys.add("version");
         Set<String> reported = new TreeSet<>();
-        for (JSONObject plugin: plugins) {
+        for (JSONObject plugin : plugins) {
             assertThat(plugin.keySet(), is(keys));
             assertThat(plugin.get("name"), instanceOf(String.class));
             assertThat(plugin.get("version"), instanceOf(String.class));
@@ -187,7 +185,7 @@ public class UsageStatisticsTest {
     private void compareWithFile(String fileName, Object object) throws IOException, URISyntaxException {
 
         Class clazz = this.getClass();
-        String fileContent = new String(Files.readAllBytes(Paths.get(clazz.getResource(clazz.getSimpleName() + "/" + fileName).toURI())), StandardCharsets.UTF_8);
+        String fileContent = Files.readString(Paths.get(clazz.getResource(clazz.getSimpleName() + "/" + fileName).toURI()), StandardCharsets.UTF_8);
         fileContent = fileContent.replace("JVMVENDOR", System.getProperty("java.vm.vendor"));
         fileContent = fileContent.replace("JVMNAME", System.getProperty("java.vm.name"));
         fileContent = fileContent.replace("JVMVERSION", System.getProperty("java.version"));

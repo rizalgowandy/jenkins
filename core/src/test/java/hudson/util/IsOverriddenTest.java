@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.util;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -30,6 +31,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import hudson.Util;
+import java.io.PrintWriter;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ErrorCollector;
@@ -51,6 +53,8 @@ public class IsOverriddenTest {
         assertTrue(Util.isOverridden(Base.class, Derived.class, "method"));
         assertTrue(Util.isOverridden(Base.class, Intermediate.class, "method"));
         assertFalse(Util.isOverridden(Base.class, Base.class, "method"));
+        assertFalse(Util.isOverridden(Throwable.class, Throwable.class, "printStackTrace", PrintWriter.class));
+        assertFalse(Util.isOverridden(Throwable.class, Exception.class, "printStackTrace", PrintWriter.class));
         assertTrue(Util.isOverridden(Base.class, Intermediate.class, "setX", Object.class));
         assertTrue(Util.isOverridden(Base.class, Intermediate.class, "getX"));
     }
@@ -80,16 +84,24 @@ public class IsOverriddenTest {
 
     public abstract static class Base<T> {
         protected abstract void method();
+
         private void aPrivateMethod() {}
+
         public void setX(T t) {}
+
         public T getX() { return null; }
     }
+
     public abstract class Intermediate extends Base<Integer> {
         protected void method() {}
+
         private void aPrivateMethod() {}
+
         public void setX(Integer i) {}
+
         public Integer getX() { return 0; }
     }
+
     public class Derived extends Intermediate {}
 
     @Issue("JENKINS-62723")
@@ -128,23 +140,31 @@ public class IsOverriddenTest {
             return null;
         });
     }
+
     public interface X {
         void m1();
+
         default void m2() {}
     }
+
     public static class X1 implements X {
         public void m1() {}
     }
+
     public static class X2 implements X {
         public final void m1() {}
     }
+
     public static class X3 implements X {
         public void m1() {}
+
         @Override
         public void m2() {}
     }
+
     public static class X4 implements X {
         public void m1() {}
+
         @Override
         public final void m2() {}
     }
@@ -203,21 +223,28 @@ public class IsOverriddenTest {
             return null;
         });
     }
+
     private interface I1 {
         String foo();
+
         String bar();
     }
+
     private interface I2 extends I1 {
         default String bar() { return "default"; }
     }
+
     private abstract static class C1 implements I1 {
     }
+
     private abstract static class C2 extends C1 implements I2 {
         @Override public abstract String foo();
     }
+
     private abstract static class C3 extends C2 {
         @Override public String foo() { return "foo"; }
     }
+
     private static class C4 extends C3 implements I1 {
         @Override public String bar() { return "bar"; }
     }

@@ -30,17 +30,17 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 
-import com.gargoylesoftware.htmlunit.Page;
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import hudson.model.User;
+import jakarta.servlet.http.HttpSession;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
-import javax.servlet.http.HttpSession;
 import jenkins.model.Jenkins;
 import jenkins.security.ApiTokenProperty;
 import jenkins.security.apitoken.TokenUuidAndPlainValue;
+import org.htmlunit.Page;
+import org.htmlunit.html.HtmlPage;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
@@ -73,13 +73,13 @@ public class WhoAmITest {
         String content = whoAmIPage.getWebResponse().getContentAsString();
 
         String sessionId = wc.executeOnServer(() -> {
-            HttpSession session = Stapler.getCurrentRequest().getSession(false);
+            HttpSession session = Stapler.getCurrentRequest2().getSession(false);
             return session != null ? session.getId() : null;
         });
 
         assertThat(sessionId, not(nullValue()));
 
-        // dangerous stuff in Regular Login mode: 
+        // dangerous stuff in Regular Login mode:
         /*
          * <td>Details:</td>
          * <td>org.acegisecurity.ui.WebAuthenticationDetails@12afc: RemoteIpAddress: 127.0.0.1; SessionId: node0gbmv9ly0f3h517eppoupykq6n0</td>
@@ -114,13 +114,13 @@ public class WhoAmITest {
         String content = whoAmIPage.getWebResponse().getContentAsString();
 
         String sessionId = wc.executeOnServer(() -> {
-            HttpSession session = Stapler.getCurrentRequest().getSession(false);
+            HttpSession session = Stapler.getCurrentRequest2().getSession(false);
             return session != null ? session.getId() : null;
         });
 
         assertThat(sessionId, not(nullValue()));
 
-        // dangerous stuff in Regular Login mode with the api/json call: 
+        // dangerous stuff in Regular Login mode with the api/json call:
         /*
          * {
          *    "_class": "hudson.security.WhoAmI",
@@ -156,7 +156,7 @@ public class WhoAmITest {
         HtmlPage whoAmIPage = wc.goTo("whoAmI");
         String content = whoAmIPage.getWebResponse().getContentAsString();
 
-        // dangerous stuff in Basic mode: 
+        // dangerous stuff in Basic mode:
         /*
          * <td>toString:</td>
          * <td>org.acegisecurity.providers.UsernamePasswordAuthenticationToken@e8fd00a7: Username: [toString()=S3cr3t];
@@ -191,7 +191,7 @@ public class WhoAmITest {
         HtmlPage whoAmIPage = wc.goTo("whoAmI");
         String content = whoAmIPage.getWebResponse().getContentAsString();
 
-        // dangerous stuff in API Token mode: 
+        // dangerous stuff in API Token mode:
         /*
          * <td rowspan="1">Authorization</td>
          * <td>Basic dXNlcjoxMTRiNGRmMWNhZTVkNDQ2MjgxZTJkZWEzMDY1NTEyZDBi</td>

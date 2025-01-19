@@ -30,10 +30,11 @@ import hudson.security.ACLContext;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.springframework.security.core.Authentication;
 
 /**
  * Utilities for working with listener interfaces.
- * @since TODO
+ * @since 2.324
  */
 public class Listeners {
 
@@ -42,10 +43,17 @@ public class Listeners {
      * <p>Only suitable for listener methods which do not throw checked or otherwise documented exceptions.
      * @param <L> the type of listener
      * @param listenerType the type of listener
+     * @param asSystem whether to impersonate {@link ACL#SYSTEM2}.
+     *                 For most listener methods, this should be {@code true},
+     *                 so that listener implementations can freely perform various operations without access checks.
+     *                 In some cases, existing listener interfaces were implicitly assumed to pass along user authentication,
+     *                 because they were sometimes triggered by user actions such as configuration changes;
+     *                 this is an antipattern (better to pass an explicit {@link Authentication} argument if relevant).
      * @param notification a listener method, perhaps with arguments
+     * @since 2.325
      */
-    public static <L> void notify(Class<L> listenerType, Consumer<L> notification) {
-        try (ACLContext ctx = ACL.as2(ACL.SYSTEM2)) {
+    public static <L> void notify(Class<L> listenerType, boolean asSystem, Consumer<L> notification) {
+        Runnable r = () -> {
             for (L listener : ExtensionList.lookup(listenerType)) {
                 try {
                     notification.accept(listener);
@@ -53,6 +61,13 @@ public class Listeners {
                     Logger.getLogger(listenerType.getName()).log(Level.WARNING, null, x);
                 }
             }
+        };
+        if (asSystem) {
+            try (ACLContext ctx = ACL.as2(ACL.SYSTEM2)) {
+                r.run();
+            }
+        } else {
+            r.run();
         }
     }
 

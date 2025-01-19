@@ -12,17 +12,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package jenkins.security;
 
 import static java.util.logging.Level.FINER;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Extension;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.logging.Logger;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import jenkins.ExtensionFilter;
 import jenkins.model.Jenkins;
 import jenkins.util.SystemProperties;
@@ -62,7 +63,7 @@ public class BasicHeaderRealPasswordAuthenticator extends BasicHeaderAuthenticat
             return a;
         } catch (AuthenticationException failed) {
             // Authentication failed
-            LOGGER.log(FINER, "Authentication request for user: {0} failed: {1}", new Object[]{username,failed});
+            LOGGER.log(FINER, "Authentication request for user: {0} failed: {1}", new Object[]{username, failed});
             return null;
         }
     }

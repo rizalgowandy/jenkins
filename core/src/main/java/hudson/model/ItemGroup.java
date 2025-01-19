@@ -1,18 +1,18 @@
 /*
  * The MIT License
- * 
+ *
  * Copyright (c) 2004-2009, Sun Microsystems, Inc., Kohsuke Kawaguchi
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model;
 
 import edu.umd.cs.findbugs.annotations.CheckForNull;
@@ -44,12 +45,12 @@ public interface ItemGroup<T extends Item> extends PersistenceRoot, ModelObject 
     /**
      * Gets the full name of this {@link ItemGroup}.
      *
-     * @see Item#getFullName() 
+     * @see Item#getFullName()
      */
     String getFullName();
 
     /**
-     * @see Item#getFullDisplayName() 
+     * @see Item#getFullDisplayName()
      */
     String getFullDisplayName();
 
@@ -175,4 +176,17 @@ public interface ItemGroup<T extends Item> extends PersistenceRoot, ModelObject 
     // TODO could delegate to allItems overload taking Authentication, but perhaps more useful to introduce a variant to perform preauth filtering using Predicate and check Item.READ afterwards
     // or return a Stream<Item> and provide a Predicate<Item> public static Items.readable(), and see https://stackoverflow.com/q/22694884/12916 if you are looking for just one result
 
+    /**
+     * Determines the item name based on a logic that can be overridden (e.g. by AbstractFolder).
+     *
+     * Defaults to the item root directory name.
+     *
+     * @param dir The root directory the item was loaded from.
+     * @param item the partially loaded item (take care what methods you call, the item will not have a reference to its parent).
+     *
+     * @since 2.444
+     */
+    default String getItemName(File dir, T item) {
+        return dir.getName();
+    }
 }

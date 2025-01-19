@@ -1,18 +1,18 @@
 /*
  * The MIT License
- * 
+ *
  * Copyright (c) 2004-2009, Sun Microsystems, Inc., Kohsuke Kawaguchi
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,19 +21,25 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.scm;
 
+import hudson.Util;
 import hudson.model.AbstractBuild;
 import hudson.model.BuildBadgeAction;
 import hudson.model.Run;
 import hudson.model.TaskAction;
 import hudson.security.ACL;
 import hudson.security.Permission;
+import io.jenkins.servlet.ServletExceptionWrapper;
+import jakarta.servlet.ServletException;
 import java.io.IOException;
-import javax.servlet.ServletException;
 import jenkins.model.RunAction2;
+import jenkins.security.stapler.StaplerNotDispatchable;
 import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerResponse2;
 
 /**
  * Common part of {@code CVSSCM.TagAction} and {@code SubversionTagAction}.
@@ -47,14 +53,14 @@ import org.kohsuke.stapler.StaplerResponse;
  */
 public abstract class AbstractScmTagAction extends TaskAction implements BuildBadgeAction, RunAction2 {
 
-    private transient /*final*/ Run<?,?> run;
+    private transient /*final*/ Run<?, ?> run;
     @Deprecated
     protected transient /*final*/ AbstractBuild build;
 
     /**
      * @since 1.568
      */
-    protected AbstractScmTagAction(Run<?,?> run) {
+    protected AbstractScmTagAction(Run<?, ?> run) {
         this.run = run;
         this.build = run instanceof AbstractBuild ? (AbstractBuild) run : null;
     }
@@ -81,7 +87,7 @@ public abstract class AbstractScmTagAction extends TaskAction implements BuildBa
     /**
      * @since 1.568
      */
-    public Run<?,?> getRun() {
+    public Run<?, ?> getRun() {
         return run;
     }
 
@@ -107,12 +113,37 @@ public abstract class AbstractScmTagAction extends TaskAction implements BuildBa
         return run.getACL();
     }
 
-    public void doIndex(StaplerRequest req, StaplerResponse rsp) throws IOException, ServletException {
-        req.getView(this,chooseAction()).forward(req,rsp);
+    public void doIndex(StaplerRequest2 req, StaplerResponse2 rsp) throws IOException, ServletException {
+        if (Util.isOverridden(AbstractScmTagAction.class, getClass(), "doIndex", StaplerRequest.class, StaplerResponse.class)) {
+            try {
+                doIndex(StaplerRequest.fromStaplerRequest2(req), StaplerResponse.fromStaplerResponse2(rsp));
+            } catch (javax.servlet.ServletException e) {
+                throw ServletExceptionWrapper.toJakartaServletException(e);
+            }
+        } else {
+            doIndexImpl(req, rsp);
+        }
+    }
+
+    /**
+     * @deprecated use {@link #doIndex(StaplerRequest2, StaplerResponse2)}
+     */
+    @Deprecated
+    @StaplerNotDispatchable
+    public void doIndex(StaplerRequest req, StaplerResponse rsp) throws IOException, javax.servlet.ServletException {
+        try {
+            doIndexImpl(StaplerRequest.toStaplerRequest2(req), StaplerResponse.toStaplerResponse2(rsp));
+        } catch (ServletException e) {
+            throw ServletExceptionWrapper.fromJakartaServletException(e);
+        }
+    }
+
+    private void doIndexImpl(StaplerRequest2 req, StaplerResponse2 rsp) throws IOException, ServletException {
+        req.getView(this, chooseAction()).forward(req, rsp);
     }
 
     protected synchronized String chooseAction() {
-        if(workerThread!=null)
+        if (workerThread != null)
             return "inProgress.jelly";
         return "tagForm.jelly";
     }

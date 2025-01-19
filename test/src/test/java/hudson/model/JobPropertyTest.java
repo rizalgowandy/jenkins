@@ -21,18 +21,19 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model;
 
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
-import com.gargoylesoftware.htmlunit.WebAssert;
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import hudson.matrix.MatrixProject;
 import hudson.model.Descriptor.FormException;
 import java.util.logging.Level;
 import net.sf.json.JSONObject;
+import org.htmlunit.WebAssert;
+import org.htmlunit.html.HtmlPage;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
@@ -40,7 +41,7 @@ import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.LoggerRule;
 import org.jvnet.hudson.test.TestExtension;
 import org.kohsuke.stapler.DataBoundConstructor;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 
 public class JobPropertyTest {
 
@@ -64,15 +65,16 @@ public class JobPropertyTest {
 
     private void assertJobPropertySummaryIsShownInIndexPage(Class<? extends TopLevelItem> type) throws Exception {
         JobPropertyImpl jp = new JobPropertyImpl("NeedleInPage");
-        Job<?,?> project = (Job<?, ?>) j.jenkins.createProject(type, "job-test-case");
+        Job<?, ?> project = (Job<?, ?>) j.jenkins.createProject(type, "job-test-case");
         project.addProperty(jp);
 
         HtmlPage page = j.createWebClient().goTo("job/job-test-case");
         WebAssert.assertTextPresent(page, "NeedleInPage");
     }
 
-    public static class JobPropertyImpl extends JobProperty<Job<?,?>> {
+    public static class JobPropertyImpl extends JobProperty<Job<?, ?>> {
         private final String propertyString;
+
         public JobPropertyImpl(String propertyString) {
             this.propertyString = propertyString;
         }
@@ -100,18 +102,18 @@ public class JobPropertyTest {
         FreeStyleProject p = j.createFreeStyleProject();
         JobPropertyWithConfigImpl before = new JobPropertyWithConfigImpl("Duke");
         p.addProperty(before);
-        j.configRoundtrip((Item)p);
+        j.configRoundtrip((Item) p);
         JobPropertyWithConfigImpl after = p.getProperty(JobPropertyWithConfigImpl.class);
-        assertNotSame(after,before);
+        assertNotSame(after, before);
         j.assertEqualDataBoundBeans(before, after);
         p.removeProperty(after);
         JobPropertyWithConfigImpl empty = new JobPropertyWithConfigImpl("");
         p.addProperty(empty);
-        j.configRoundtrip((Item)p);
+        j.configRoundtrip((Item) p);
         assertNull(p.getProperty(JobPropertyWithConfigImpl.class));
     }
 
-    public static class JobPropertyWithConfigImpl extends JobProperty<Job<?,?>> {
+    public static class JobPropertyWithConfigImpl extends JobProperty<Job<?, ?>> {
         public String name;
 
         @DataBoundConstructor
@@ -122,7 +124,7 @@ public class JobPropertyTest {
         @TestExtension("configRoundtrip")
         public static class DescriptorImpl extends JobPropertyDescriptor {
             @Override
-            public JobProperty<?> newInstance(StaplerRequest req, JSONObject formData) throws FormException {
+            public JobProperty<?> newInstance(StaplerRequest2 req, JSONObject formData) throws FormException {
                 JobPropertyWithConfigImpl prop = (JobPropertyWithConfigImpl) super.newInstance(req, formData);
                 return prop.name.isEmpty() ? null : prop;
             }
@@ -134,18 +136,18 @@ public class JobPropertyTest {
         FreeStyleProject p = j.createFreeStyleProject();
         InvisibleImpl before = new InvisibleImpl();
         p.addProperty(before);
-        j.configRoundtrip((Item)p);
+        j.configRoundtrip((Item) p);
         InvisibleImpl after = p.getProperty(InvisibleImpl.class);
-        assertSame(after,before);
+        assertSame(after, before);
     }
 
-    public static class InvisibleImpl extends JobProperty<Job<?,?>> {
+    public static class InvisibleImpl extends JobProperty<Job<?, ?>> {
         public String name;
 
         InvisibleImpl() {}
 
         @Override
-        public JobProperty<?> reconfigure(StaplerRequest req, JSONObject form) {
+        public JobProperty<?> reconfigure(StaplerRequest2 req, JSONObject form) {
             return this;
         }
 

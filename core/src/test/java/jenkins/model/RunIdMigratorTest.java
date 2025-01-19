@@ -36,6 +36,8 @@ import hudson.util.StreamTaskListener;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.TimeZone;
 import java.util.TreeMap;
@@ -199,15 +201,6 @@ public class RunIdMigratorTest {
                     + "</run>'}, lastFailedBuild=→-1, lastSuccessfulBuild=→99, legacyIds='2014-01-02_03-04-05 99\n"
                     + "'}",
                 summarize());
-        RunIdMigrator.main(root.getAbsolutePath());
-        assertEquals(
-                "{2014-01-02_03-04-05={build.xml='<?xml version='1.0' encoding='UTF-8'?>\n"
-                    + "<run>\n"
-                    + "  <stuff>ok</stuff>\n"
-                    + "  <number>99</number>\n"
-                    + "  <otherstuff>ok</otherstuff>\n"
-                    + "</run>'}, 99=→2014-01-02_03-04-05, lastFailedBuild=→-1, lastSuccessfulBuild=→99}",
-                summarize());
     }
 
     @Test public void reverseAfterNewBuilds() throws Exception {
@@ -230,15 +223,6 @@ public class RunIdMigratorTest {
                     + "  <timestamp>1388649845000</timestamp>\n"
                     + "  <otherstuff>ok</otherstuff>\n"
                     + "</run>'}, legacyIds=''}",
-                summarize());
-        RunIdMigrator.main(root.getAbsolutePath());
-        assertEquals(
-                "{1=→2014-01-02_03-04-05, 2014-01-02_03-04-05={build.xml='<?xml version='1.0' encoding='UTF-8'?>\n"
-                    + "<run>\n"
-                    + "  <stuff>ok</stuff>\n"
-                    + "  <number>1</number>\n"
-                    + "  <otherstuff>ok</otherstuff>\n"
-                    + "</run>'}}",
                 summarize());
     }
 
@@ -263,15 +247,6 @@ public class RunIdMigratorTest {
                     + "  <otherstuff>ok</otherstuff>\n"
                     + "</run>'}, legacyIds=''}",
                 summarize());
-        RunIdMigrator.main(root.getAbsolutePath());
-        assertEquals(
-                "{1=→2014-01-02_03-04-05, 2014-01-02_03-04-05={build.xml='<?xml version='1.0' encoding='UTF-8'?>\n"
-                    + "<run>\n"
-                    + "  <stuff>ok</stuff>\n"
-                    + "  <number>1</number>\n"
-                    + "  <otherstuff>ok</otherstuff>\n"
-                    + "</run>'}}",
-                summarize());
     }
 
     @Test public void reverseMavenAfterNewBuilds() throws Exception {
@@ -295,21 +270,14 @@ public class RunIdMigratorTest {
                     + "  <otherstuff>ok</otherstuff>\n"
                     + "</run>'}, legacyIds=''}",
                 summarize());
-        RunIdMigrator.main(root.getAbsolutePath());
-        assertEquals(
-                "{1=→2014-01-02_03-04-05, 2014-01-02_03-04-05={build.xml='<?xml version='1.0' encoding='UTF-8'?>\n"
-                    + "<run>\n"
-                    + "  <stuff>ok</stuff>\n"
-                    + "  <number>1</number>\n"
-                    + "  <otherstuff>ok</otherstuff>\n"
-                    + "</run>'}}",
-                summarize());
     }
 
     // TODO test sane recovery from various error conditions
 
     private void write(String file, String text) throws Exception {
-        FileUtils.write(new File(dir, file), text, Charset.defaultCharset());
+        Path path = new File(dir, file).toPath();
+        Files.createDirectories(path.getParent());
+        Files.writeString(path, text, Charset.defaultCharset());
     }
 
     private void link(String symlink, String dest) throws Exception {
@@ -319,16 +287,17 @@ public class RunIdMigratorTest {
     private String summarize() throws Exception {
         return summarize(dir);
     }
+
     private static String summarize(File dir) throws Exception {
         File[] kids = dir.listFiles();
-        Map<String,String> m = new TreeMap<>();
+        Map<String, String> m = new TreeMap<>();
         for (File kid : kids) {
             String notation;
             String symlink = Util.resolveSymlink(kid);
             if (symlink != null) {
                 notation = "→" + symlink;
             } else if (kid.isFile()) {
-                notation = "'" + FileUtils.readFileToString(kid, Charset.defaultCharset()) + "'";
+                notation = "'" + Files.readString(kid.toPath(), Charset.defaultCharset()) + "'";
             } else if (kid.isDirectory()) {
                 notation = summarize(kid);
             } else {

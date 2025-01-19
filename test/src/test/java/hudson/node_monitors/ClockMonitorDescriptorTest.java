@@ -16,10 +16,10 @@ import org.jvnet.hudson.test.JenkinsRule;
  * @author Richard Mortimer
  */
 public class ClockMonitorDescriptorTest {
-    
+
     @Rule
     public JenkinsRule jenkins = new  JenkinsRule();
-    
+
     /**
      * Makes sure that it returns sensible values.
      */
@@ -27,8 +27,8 @@ public class ClockMonitorDescriptorTest {
     public void testClockMonitor() throws Exception {
         DumbSlave s = jenkins.createOnlineSlave();
         SlaveComputer c = s.getComputer();
-        if(c.isOffline())
-            fail("Slave failed to go online: "+c.getLog());
+        if (c.isOffline())
+            fail("Slave failed to go online: " + c.getLog());
 
         ClockDifference cd = ClockMonitor.DESCRIPTOR.monitor(c);
         long diff = cd.diff;
@@ -37,6 +37,6 @@ public class ClockMonitorDescriptorTest {
         assertTrue(cd.abs() >= 0);
         assertTrue(cd.abs() < TimeUnit.SECONDS.toMillis(5));
         assertFalse(cd.isDangerous());
-        assertTrue("html output too short", cd.toHtml().length() > 0);
+        assertFalse("html output too short", cd.toHtml().isEmpty());
     }
 }

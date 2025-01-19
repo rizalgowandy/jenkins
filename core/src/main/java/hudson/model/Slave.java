@@ -22,6 +22,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model;
 
 import edu.umd.cs.findbugs.annotations.CheckForNull;
@@ -35,6 +36,7 @@ import hudson.RestrictedSince;
 import hudson.Util;
 import hudson.cli.CLI;
 import hudson.model.Descriptor.FormException;
+import hudson.model.labels.LabelAtom;
 import hudson.remoting.Callable;
 import hudson.remoting.Channel;
 import hudson.remoting.Which;
@@ -49,6 +51,7 @@ import hudson.slaves.SlaveComputer;
 import hudson.util.ClockDifference;
 import hudson.util.DescribableList;
 import hudson.util.FormValidation;
+import jakarta.servlet.ServletException;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -58,31 +61,27 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.servlet.ServletException;
 import jenkins.model.Jenkins;
 import jenkins.security.MasterToSlaveCallable;
 import jenkins.slaves.WorkspaceLocator;
 import jenkins.util.SystemProperties;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.StringUtils;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.DoNotUse;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 
 /**
  * Information about a Hudson agent node.
@@ -93,7 +92,7 @@ import org.kohsuke.stapler.StaplerResponse;
  *
  * <p>
  * TODO: move out more stuff to {@link DumbSlave}.
- * 
+ *
  * On February, 2016 a general renaming was done internally: the "slave" term was replaced by
  * "Agent". This change was applied in: UI labels/HTML pages, javadocs and log messages.
  * Java classes, fields, methods, etc were not renamed to avoid compatibility issues.
@@ -102,9 +101,9 @@ import org.kohsuke.stapler.StaplerResponse;
  * @author Kohsuke Kawaguchi
  */
 public abstract class Slave extends Node implements Serializable {
-    
+
     private static final Logger LOGGER = Logger.getLogger(Slave.class.getName());
-    
+
     /**
      * Name of this agent node.
      */
@@ -148,9 +147,9 @@ public abstract class Slave extends Node implements Serializable {
     /**
      * Whitespace-separated labels.
      */
-    private String label="";
+    private String label = "";
 
-    private /*almost final*/ DescribableList<NodeProperty<?>,NodePropertyDescriptor> nodeProperties =
+    private /*almost final*/ DescribableList<NodeProperty<?>, NodePropertyDescriptor> nodeProperties =
             new DescribableList<>(this);
 
     /**
@@ -166,7 +165,7 @@ public abstract class Slave extends Node implements Serializable {
     @Deprecated
     protected Slave(String name, String nodeDescription, String remoteFS, String numExecutors,
                  Mode mode, String labelString, ComputerLauncher launcher, RetentionStrategy retentionStrategy, List<? extends NodeProperty<?>> nodeProperties) throws FormException, IOException {
-        this(name,nodeDescription,remoteFS,Util.tryParseNumber(numExecutors, 1).intValue(),mode,labelString,launcher,retentionStrategy, nodeProperties);
+        this(name, nodeDescription, remoteFS, Util.tryParseNumber(numExecutors, 1).intValue(), mode, labelString, launcher, retentionStrategy, nodeProperties);
     }
 
     /**
@@ -175,13 +174,14 @@ public abstract class Slave extends Node implements Serializable {
     @Deprecated
     protected Slave(String name, String nodeDescription, String remoteFS, int numExecutors,
             Mode mode, String labelString, ComputerLauncher launcher, RetentionStrategy retentionStrategy) throws FormException, IOException {
-    	this(name, nodeDescription, remoteFS, numExecutors, mode, labelString, launcher, retentionStrategy, new ArrayList());
+        this(name, nodeDescription, remoteFS, numExecutors, mode, labelString, launcher, retentionStrategy, new ArrayList());
     }
 
     protected Slave(@NonNull String name, String remoteFS, ComputerLauncher launcher) throws FormException, IOException {
         this.name = name;
         this.remoteFS = remoteFS;
         this.launcher = launcher;
+        this.labelAtomSet = Collections.unmodifiableSet(Label.parse(label));
     }
 
     /**
@@ -196,17 +196,17 @@ public abstract class Slave extends Node implements Serializable {
         this.numExecutors = numExecutors;
         this.mode = mode;
         this.remoteFS = Util.fixNull(remoteFS).trim();
-        this.label = Util.fixNull(labelString).trim();
+        _setLabelString(labelString);
         this.launcher = launcher;
         this.retentionStrategy = retentionStrategy;
         getAssignedLabels();    // compute labels now
 
         this.nodeProperties.replaceBy(nodeProperties);
 
-        if (name.equals(""))
+        if (name.isEmpty())
             throw new FormException(Messages.Slave_InvalidConfig_NoName(), null);
 
-        if (this.numExecutors<=0)
+        if (this.numExecutors <= 0)
             throw new FormException(Messages.Slave_InvalidConfig_Executors(name), null);
     }
 
@@ -236,7 +236,7 @@ public abstract class Slave extends Node implements Serializable {
     }
 
     public ComputerLauncher getLauncher() {
-        if (launcher == null && !StringUtils.isEmpty(agentCommand)) {
+        if (launcher == null && agentCommand != null && !agentCommand.isEmpty()) {
             try {
                 launcher = (ComputerLauncher) Jenkins.get().getPluginManager().uberClassLoader.loadClass("hudson.slaves.CommandLauncher").getConstructor(String.class, EnvVars.class).newInstance(agentCommand, null);
                 agentCommand = null;
@@ -245,8 +245,7 @@ public abstract class Slave extends Node implements Serializable {
                 LOGGER.log(Level.WARNING, "could not update historical agentCommand setting to CommandLauncher", x);
             }
         }
-        // Default launcher does not use Work Directory
-        return launcher == null ? new JNLPLauncher(false) : launcher;
+        return launcher == null ? new JNLPLauncher() : launcher;
     }
 
     public void setLauncher(ComputerLauncher launcher) {
@@ -302,14 +301,19 @@ public abstract class Slave extends Node implements Serializable {
         this.mode = mode;
     }
 
+    @NonNull
     @Override
     public DescribableList<NodeProperty<?>, NodePropertyDescriptor> getNodeProperties() {
         assert nodeProperties != null;
-    	return nodeProperties;
+        return nodeProperties;
     }
 
     @DataBoundSetter
     public void setNodeProperties(List<? extends NodeProperty<?>> properties) throws IOException {
+        if (nodeProperties == null) {
+            warnPlugin();
+            nodeProperties = new DescribableList<>(this);
+        }
         nodeProperties.replaceBy(properties);
     }
 
@@ -330,13 +334,35 @@ public abstract class Slave extends Node implements Serializable {
     @Override
     @DataBoundSetter
     public void setLabelString(String labelString) throws IOException {
-        this.label = Util.fixNull(labelString).trim();
+        _setLabelString(labelString);
         // Compute labels now.
         getAssignedLabels();
     }
 
+    private void _setLabelString(String labelString) {
+        this.label = Util.fixNull(labelString).trim();
+        this.labelAtomSet = Collections.unmodifiableSet(Label.parse(label));
+    }
+
+    @CheckForNull // should be @NonNull, but we've seen plugins overriding readResolve() without calling super.
+    private transient Set<LabelAtom> labelAtomSet;
+
     @Override
-    public Callable<ClockDifference,IOException> getClockDifferenceCallable() {
+    protected Set<LabelAtom> getLabelAtomSet() {
+        if (labelAtomSet == null) {
+            warnPlugin();
+            this.labelAtomSet = Collections.unmodifiableSet(Label.parse(label));
+        }
+        return labelAtomSet;
+    }
+
+    private void warnPlugin() {
+        LOGGER.log(Level.WARNING, () -> getClass().getName() + " or one of its superclass overrides readResolve() without calling super implementation." +
+                "Please file an issue against the plugin implementing it: " + Jenkins.get().getPluginManager().whichPlugin(getClass()));
+    }
+
+    @Override
+    public Callable<ClockDifference, IOException> getClockDifferenceCallable() {
         return new GetClockDifference1();
     }
 
@@ -355,7 +381,7 @@ public abstract class Slave extends Node implements Serializable {
         }
 
         FilePath r = getWorkspaceRoot();
-        if(r==null)     return null;    // offline
+        if (r == null)     return null;    // offline
         return r.child(item.getFullName());
     }
 
@@ -367,7 +393,7 @@ public abstract class Slave extends Node implements Serializable {
             // if computer is null then channel is null and thus we were going to return null anyway
             return null;
         } else {
-            return createPath(StringUtils.defaultString(computer.getAbsoluteRemoteFs(), remoteFS));
+            return createPath(Objects.toString(computer.getAbsoluteRemoteFs(), remoteFS));
         }
     }
 
@@ -378,7 +404,7 @@ public abstract class Slave extends Node implements Serializable {
      */
     public @CheckForNull FilePath getWorkspaceRoot() {
         FilePath r = getRootPath();
-        if(r==null) return null;
+        if (r == null) return null;
         return r.child(WORKSPACE_ROOT);
     }
 
@@ -392,7 +418,7 @@ public abstract class Slave extends Node implements Serializable {
             this.fileName = fileName;
         }
 
-        public void doIndex( StaplerRequest req, StaplerResponse rsp) throws IOException, ServletException {
+        public void doIndex(StaplerRequest2 req, StaplerResponse2 rsp) throws IOException, ServletException {
             URLConnection con = connect();
             // since we end up redirecting users to jnlpJars/foo.jar/, set the content disposition
             // so that browsers can download them in the right file name.
@@ -404,8 +430,8 @@ public abstract class Slave extends Node implements Serializable {
         }
 
         @Override
-        public void generateResponse(StaplerRequest req, StaplerResponse rsp, Object node) throws IOException, ServletException {
-            doIndex(req,rsp);
+        public void generateResponse(StaplerRequest2 req, StaplerResponse2 rsp, Object node) throws IOException, ServletException {
+            doIndex(req, rsp);
         }
 
         private URLConnection connect() throws IOException {
@@ -415,7 +441,7 @@ public abstract class Slave extends Node implements Serializable {
 
         public URL getURL() throws IOException {
             String name = fileName;
-            
+
             // Prevent the access to war contents & prevent the folder escaping (SECURITY-195)
             if (!ALLOWED_JNLPJARS_FILES.contains(name)) {
                 throw new MalformedURLException("The specified file path " + fileName + " is not allowed due to security reasons");
@@ -438,9 +464,9 @@ public abstract class Slave extends Node implements Serializable {
                     }
                 }
             }
-            
-            URL res = Jenkins.get().servletContext.getResource("/WEB-INF/" + name);
-            if(res==null) {
+
+            URL res = Jenkins.get().getServletContext().getResource("/WEB-INF/" + name);
+            if (res == null) {
                 throw new FileNotFoundException(name); // giving up
             } else {
                 LOGGER.log(Level.FINE, "found {0}", res);
@@ -471,7 +497,7 @@ public abstract class Slave extends Node implements Serializable {
 
         public byte[] readFully() throws IOException {
             try (InputStream in = connect().getInputStream()) {
-                return IOUtils.toByteArray(in);
+                return in.readAllBytes();
             }
         }
 
@@ -492,9 +518,9 @@ public abstract class Slave extends Node implements Serializable {
             listener.error("Issue with creating launcher for agent " + name + ". Computer has been disconnected");
             return new Launcher.DummyLauncher(listener);
         } else {
-            // TODO: ideally all the logic below should be inside the SlaveComputer class with proper locking to prevent race conditions, 
+            // TODO: ideally all the logic below should be inside the SlaveComputer class with proper locking to prevent race conditions,
             // but so far there is no locks for setNode() hence it requires serious refactoring
-            
+
             // Ensure that the Computer instance still points to this node
             // Otherwise we may end up running the command on a wrong (reconnected) Node instance.
             Slave node = c.getNode();
@@ -505,10 +531,10 @@ public abstract class Slave extends Node implements Serializable {
                 }
                 return new Launcher.DummyLauncher(listener);
             }
-            
+
             // RemoteLauncher requires an active Channel instance to operate correctly
             final Channel channel = c.getChannel();
-            if (channel == null) { 
+            if (channel == null) {
                 reportLauncherCreateError("The agent has not been fully initialized yet",
                                          "No remoting channel to the agent OR it has not been fully initialized yet", listener);
                 return new Launcher.DummyLauncher(listener);
@@ -523,22 +549,22 @@ public abstract class Slave extends Node implements Serializable {
                 // isUnix is always set when the channel is not null, so it should never happen
                 reportLauncherCreateError("The agent has not been fully initialized yet",
                                          "Cannot determine if the agent is a Unix one, the System status request has not completed yet. " +
-                                         "It is an invalid channel state, please report a bug to Jenkins if you see it.", 
+                                         "It is an invalid channel state, please report a bug to Jenkins if you see it.",
                                          listener);
                 return new Launcher.DummyLauncher(listener);
             }
-            
+
             return new RemoteLauncher(listener, channel, isUnix).decorateFor(this);
         }
     }
-    
+
     private void reportLauncherCreateError(@NonNull String humanReadableMsg, @CheckForNull String exceptionDetails, @NonNull TaskListener listener) {
         String message = "Issue with creating launcher for agent " + name + ". " + humanReadableMsg;
         listener.error(message);
         if (LOGGER.isLoggable(Level.WARNING)) {
             // Send stacktrace to the log as well in order to diagnose the root cause of issues like JENKINS-38527
             LOGGER.log(Level.WARNING, message
-                    + "Probably there is a race condition with Agent reconnection or disconnection, check other log entries", 
+                    + "Probably there is a race condition with Agent reconnection or disconnection, check other log entries",
                     new IllegalStateException(exceptionDetails != null ? exceptionDetails : humanReadableMsg));
         }
     }
@@ -552,7 +578,7 @@ public abstract class Slave extends Node implements Serializable {
      */
     @CheckForNull
     public SlaveComputer getComputer() {
-        return (SlaveComputer)toComputer();
+        return (SlaveComputer) toComputer();
     }
 
     @Override
@@ -574,8 +600,9 @@ public abstract class Slave extends Node implements Serializable {
      * Invoked by XStream when this object is read into memory.
      */
     protected Object readResolve() {
-        if(nodeProperties==null)
+        if (nodeProperties == null)
             nodeProperties = new DescribableList<>(this);
+        _setLabelString(label);
         return this;
     }
 
@@ -584,7 +611,7 @@ public abstract class Slave extends Node implements Serializable {
         Descriptor d = Jenkins.get().getDescriptorOrDie(getClass());
         if (d instanceof SlaveDescriptor)
             return (SlaveDescriptor) d;
-        throw new IllegalStateException(d.getClass()+" needs to extend from SlaveDescriptor");
+        throw new IllegalStateException(d.getClass() + " needs to extend from SlaveDescriptor");
     }
 
     public abstract static class SlaveDescriptor extends NodeDescriptor {
@@ -595,11 +622,11 @@ public abstract class Slave extends Node implements Serializable {
         /**
          * Performs syntactical check on the remote FS for agents.
          */
-        public FormValidation doCheckRemoteFS(@QueryParameter String value) throws IOException, ServletException {
-            if(Util.fixEmptyAndTrim(value)==null)
+        public FormValidation doCheckRemoteFS(@QueryParameter String value) throws IOException {
+            if (Util.fixEmptyAndTrim(value) == null)
                 return FormValidation.error(Messages.Slave_Remote_Director_Mandatory());
 
-            if(value.startsWith("\\\\") || value.startsWith("/net/"))
+            if (value.startsWith("\\\\") || value.startsWith("/net/"))
                 return FormValidation.warning(Messages.Slave_Network_Mounted_File_System_Warning());
 
             if (Util.isRelativePath(value)) {
@@ -691,7 +718,7 @@ public abstract class Slave extends Node implements Serializable {
      *     <li>When it's read on this side as a return value, it morphs itself into {@link ClockDifference}.
      * </ol>
      */
-    private static final class GetClockDifference1 extends MasterToSlaveCallable<ClockDifference,IOException> {
+    private static final class GetClockDifference1 extends MasterToSlaveCallable<ClockDifference, IOException> {
         @Override
         public ClockDifference call() {
             // this method must be being invoked locally, which means the clock is in sync
@@ -705,7 +732,7 @@ public abstract class Slave extends Node implements Serializable {
         private static final long serialVersionUID = 1L;
     }
 
-    private static final class GetClockDifference2 extends MasterToSlaveCallable<GetClockDifference3,IOException> {
+    private static final class GetClockDifference2 extends MasterToSlaveCallable<GetClockDifference3, IOException> {
         /**
          * Capture the time on the controller when this object is sent to remote, which is when
          * {@link GetClockDifference1#writeReplace()} is run.
@@ -730,17 +757,17 @@ public abstract class Slave extends Node implements Serializable {
 
         private Object readResolve() {
             long endTime = System.currentTimeMillis();
-            return new ClockDifference((startTime + endTime)/2-remoteTime);
+            return new ClockDifference((startTime + endTime) / 2 - remoteTime);
         }
     }
 
     /**
      * Determines the workspace root file name for those who really really need the shortest possible path name.
      */
-    private static final String WORKSPACE_ROOT = SystemProperties.getString(Slave.class.getName()+".workspaceRoot","workspace");
+    private static final String WORKSPACE_ROOT = SystemProperties.getString(Slave.class.getName() + ".workspaceRoot", "workspace");
 
     /**
      * Provides a collection of file names, which are accessible via /jnlpJars link.
      */
-    private static final Set<String> ALLOWED_JNLPJARS_FILES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList("agent.jar", "slave.jar", "remoting.jar", "jenkins-cli.jar", "hudson-cli.jar")));
+    private static final Set<String> ALLOWED_JNLPJARS_FILES = Set.of("agent.jar", "slave.jar", "remoting.jar", "jenkins-cli.jar", "hudson-cli.jar");
 }

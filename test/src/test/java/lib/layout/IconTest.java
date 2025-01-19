@@ -21,15 +21,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package lib.layout;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.is;
 
-import com.gargoylesoftware.htmlunit.html.DomElement;
-import com.gargoylesoftware.htmlunit.html.HtmlElement;
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import hudson.model.BallColor;
 import hudson.model.InvisibleAction;
 import hudson.model.RootAction;
@@ -45,6 +43,9 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import jenkins.util.NonLocalizable;
+import org.htmlunit.html.DomElement;
+import org.htmlunit.html.HtmlElement;
+import org.htmlunit.html.HtmlPage;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
@@ -92,13 +93,16 @@ public class IconTest  {
         HtmlPage p = j.createWebClient().goTo("testBallColorTd");
 
         DomElement ballColorAborted = p.getElementById("ballColorAborted");
-        List<DomElement> ballIcons = StreamSupport.stream(ballColorAborted.getChildElements().spliterator(), false).collect(Collectors.toList());
-        assertIconToSvgOkay(ballIcons.get(0).getFirstElementChild(), "icon-aborted icon-lg");
+        assertThat("Aborted", is(ballColorAborted.getTextContent()));
+        HtmlElement symbol = ballColorAborted.getElementsByTagName("svg").get(0);
+        assertThat("icon-md", is(symbol.getAttribute("class")));
+
+        assertIconToSymbolOkay(symbol);
 
         DomElement statusIcons = p.getElementById("statusIcons");
-        List<DomElement> statusIconsList = StreamSupport.stream(statusIcons.getChildElements().spliterator(), false).collect(Collectors.toList());
+        List<DomElement> statusIconsList = StreamSupport.stream(statusIcons.getChildElements().spliterator(), false).toList();
 
-        assertIconToImageOkay(statusIconsList.get(0).getFirstElementChild(), "/images/svgs/user.svg", "icon-user icon-xlg");
+        assertIconToSvgOkay(statusIconsList.get(0).getFirstElementChild().getNextElementSibling(), "icon-user icon-xlg");
 
         assertIconToImageOkay(statusIconsList.get(1).getFirstElementChild(), "/plugin/12345/icons/s2.png");
     }
@@ -124,6 +128,7 @@ public class IconTest  {
                 public String getImageOf(String size) {
                     return "/plugin/12345/icons/s2.png";
                 }
+
                 @Override
                 public String getDescription() {
                     return "Unknown icon";
@@ -139,16 +144,17 @@ public class IconTest  {
         DomElement tasksDiv = p.getElementById("tasks");
         List<DomElement> taskDivs = StreamSupport.stream(tasksDiv.getChildElements().spliterator(), false).collect(Collectors.toList());
 
-        assertIconToImageOkay(taskDivs.get(0).getElementsByTagName("img").get(0), "/images/svgs/up.svg", "icon-up icon-md");
+        assertIconToSymbolOkay(taskDivs.get(0).getElementsByTagName("svg").get(0));
         // this is loading the png from cloudbees-folder plugin
         // when this is swapped to an SVG and the dep updated this test will need to change
-        assertIconToImageOkay(taskDivs.get(1).getElementsByTagName("img").get(0), "/images/24x24/folder.png", "icon-folder icon-md");
-        assertIconToImageOkay(taskDivs.get(2).getElementsByTagName("img").get(0), "/images/svgs/package.svg", "icon-package icon-xlg");
-        assertIconToImageOkay(taskDivs.get(3).getElementsByTagName("img").get(0), "/images/svgs/package.svg", "icon-package icon-xlg");
-        assertIconToImageOkay(taskDivs.get(4).getElementsByTagName("img").get(0), "/images/svgs/package.svg", "icon-package icon-xlg");
+        assertIconToSvgOkay(taskDivs.get(1).getElementsByTagName("svg").get(0), "icon-folder icon-md");
+        assertIconToImageOkay(taskDivs.get(2).getElementsByTagName("img").get(0), "/images/svgs/package.svg");
+        assertIconToImageOkay(taskDivs.get(3).getElementsByTagName("img").get(0), "/images/svgs/package.svg");
+        assertIconToImageOkay(taskDivs.get(4).getElementsByTagName("img").get(0), "/images/svgs/package.svg");
+        assertIconToSymbolOkay(taskDivs.get(5).getElementsByTagName("svg").get(0));
 
-        assertIconToImageOkay(taskDivs.get(5).getElementsByTagName("img").get(0), "/plugin/xxx/icon.png");
         assertIconToImageOkay(taskDivs.get(6).getElementsByTagName("img").get(0), "/plugin/xxx/icon.png");
+        assertIconToImageOkay(taskDivs.get(7).getElementsByTagName("img").get(0), "/plugin/xxx/icon.png");
     }
 
     @TestExtension("testTasks")
@@ -172,10 +178,15 @@ public class IconTest  {
     }
 
     private void assertIconToSvgOkay(DomElement icon, String classSpec) {
-        assertThat("span", is(icon.getTagName()));
+        assertThat(icon.getTagName(), is("svg"));
+
         if (classSpec != null) {
             assertThat(icon.getAttribute("class"), endsWith(classSpec));
         }
+    }
+
+    private void assertIconToSymbolOkay(DomElement icon) {
+        assertThat("svg", is(icon.getTagName()));
     }
 
     private void dump(HtmlElement element) throws TransformerException {

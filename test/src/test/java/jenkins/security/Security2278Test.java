@@ -1,17 +1,13 @@
 package jenkins.security;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import com.gargoylesoftware.htmlunit.HttpMethod;
-import com.gargoylesoftware.htmlunit.Page;
-import com.gargoylesoftware.htmlunit.WebRequest;
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import hudson.model.Cause;
 import hudson.model.Computer;
 import hudson.model.Executor;
@@ -24,6 +20,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import jenkins.model.Jenkins;
+import org.htmlunit.HttpMethod;
+import org.htmlunit.Page;
+import org.htmlunit.WebRequest;
+import org.htmlunit.html.HtmlPage;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -70,7 +70,7 @@ public class Security2278Test {
         assertThat(contentAsString, containsString("Build Executor Status"));
         assertThat(contentAsString, containsString("Unknown Task"));
         assertThat(contentAsString, not(containsString("job/foo/job/bar")));
-        assertThat(contentAsString, not(containsString("icon-stop")));
+        assertThat(contentAsString, not(containsString("stop-button-link")));
     }
 
     @Test
@@ -81,7 +81,7 @@ public class Security2278Test {
         assertThat(contentAsString, containsString("Build Executor Status"));
         assertThat(contentAsString, not(containsString("Unknown Task")));
         assertThat(contentAsString, containsString("job/foo/job/bar"));
-        assertThat(contentAsString, containsString("icon-stop"));
+        assertThat(contentAsString, containsString("stop-button-link"));
     }
 
     @Test
@@ -110,7 +110,7 @@ public class Security2278Test {
         assertNotNull(computer);
         final List<Executor> executors = computer.getExecutors();
         int found = -1;
-        for (int i = 0; i < computer.getNumExecutors(); i ++) {
+        for (int i = 0; i < computer.getNumExecutors(); i++) {
             if (executors.get(i) == busyExecutor) {
                 found = i;
                 break;

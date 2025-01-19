@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.diagnosis;
 
 import hudson.Extension;
@@ -29,15 +30,15 @@ import hudson.security.Permission;
 import java.io.IOException;
 import jenkins.model.Jenkins;
 import org.jenkinsci.Symbol;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 import org.kohsuke.stapler.interceptor.RequirePOST;
 
 /**
  * If Hudson is run with a lot of jobs but no views, suggest the user that they can create views.
  *
  * <p>
- * I noticed at an user visit that some users didn't notice the '+' icon in the tab bar. 
+ * I noticed at an user visit that some users didn't notice the '+' icon in the tab bar.
  *
  * @author Kohsuke Kawaguchi
  */
@@ -63,13 +64,13 @@ public class TooManyJobsButNoView extends AdministrativeMonitor {
      * Depending on whether the user said "yes" or "no", send him to the right place.
      */
     @RequirePOST
-    public void doAct(StaplerRequest req, StaplerResponse rsp) throws IOException {
+    public void doAct(StaplerRequest2 req, StaplerResponse2 rsp) throws IOException {
         Jenkins.get().checkPermission(Jenkins.ADMINISTER);
-        if(req.hasParameter("no")) {
+        if (req.hasParameter("no")) {
             disable(true);
-            rsp.sendRedirect(req.getContextPath()+"/manage");
+            rsp.sendRedirect(req.getContextPath() + "/manage");
         } else {
-            rsp.sendRedirect(req.getContextPath()+"/newView");
+            rsp.sendRedirect(req.getContextPath() + "/newView");
         }
     }
 

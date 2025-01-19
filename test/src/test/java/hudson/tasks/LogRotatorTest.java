@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.tasks;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -30,7 +31,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeFalse;
 
+import hudson.Functions;
 import hudson.Launcher;
 import hudson.model.AbstractBuild;
 import hudson.model.BuildListener;
@@ -44,6 +47,7 @@ import hudson.tasks.ArtifactArchiverTest.CreateArtifact;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
@@ -66,14 +70,14 @@ public class LogRotatorTest {
     @Test
     public void successVsFailure() throws Exception {
         FreeStyleProject project = j.createFreeStyleProject();
-        project.setLogRotator(new LogRotator(-1, 2, -1, -1));
-        assertEquals(Result.SUCCESS, build(project)); // #1
-        project.getBuildersList().replaceBy(Collections.singleton(new FailureBuilder()));
-        assertEquals(Result.FAILURE, build(project)); // #2
-        assertEquals(Result.FAILURE, build(project)); // #3
+        project.setBuildDiscarder(new LogRotator(-1, 2, -1, -1));
+        j.buildAndAssertSuccess(project); // #1
+        project.getBuildersList().replaceBy(Set.of(new FailureBuilder()));
+        j.buildAndAssertStatus(Result.FAILURE, project); // #2
+        j.buildAndAssertStatus(Result.FAILURE, project); // #3
         assertEquals(1, numberOf(project.getLastSuccessfulBuild()));
         project.getBuildersList().replaceBy(Collections.emptySet());
-        assertEquals(Result.SUCCESS, build(project)); // #4
+        j.buildAndAssertSuccess(project); // #4
         assertEquals(4, numberOf(project.getLastSuccessfulBuild()));
         assertNull(project.getBuildByNumber(1));
         assertNull(project.getBuildByNumber(2));
@@ -81,53 +85,97 @@ public class LogRotatorTest {
     }
 
     @Test
+    public void successVsFailureWithRemoveLastBuild() throws Exception {
+        FreeStyleProject project = j.createFreeStyleProject();
+        LogRotator logRotator = new LogRotator(-1, 1, -1, -1);
+        logRotator.setRemoveLastBuild(true);
+        project.setBuildDiscarder(logRotator);
+        project.getPublishersList().replaceBy(Set.of(new TestsFail()));
+        j.buildAndAssertStatus(Result.UNSTABLE, project); // #1
+        project.getBuildersList().replaceBy(Set.of(new FailureBuilder()));
+        j.buildAndAssertStatus(Result.FAILURE, project); // #2
+        assertNull(project.getBuildByNumber(1));
+        assertEquals(2, numberOf(project.getLastFailedBuild()));
+    }
+
+    @Test
+    public void ableToDeleteCurrentBuild() throws Exception {
+        assumeFalse("Deleting the current build while is is completing does not work consistently on Windows",
+                Functions.isWindows());
+        var p = j.createFreeStyleProject();
+        // Keep 0 builds, i.e. immediately delete builds as they complete.
+        LogRotator logRotator = new LogRotator(-1, 0, -1, -1);
+        logRotator.setRemoveLastBuild(true);
+        p.setBuildDiscarder(logRotator);
+        j.buildAndAssertStatus(Result.SUCCESS, p);
+        assertNull(p.getBuildByNumber(1));
+    }
+
+    @Test
     @Issue("JENKINS-2417")
     public void stableVsUnstable() throws Exception {
         FreeStyleProject project = j.createFreeStyleProject();
-        project.setLogRotator(new LogRotator(-1, 2, -1, -1));
-        assertEquals(Result.SUCCESS, build(project)); // #1
-        project.getPublishersList().replaceBy(Collections.singleton(new TestsFail()));
-        assertEquals(Result.UNSTABLE, build(project)); // #2
-        assertEquals(Result.UNSTABLE, build(project)); // #3
+        project.setBuildDiscarder(new LogRotator(-1, 2, -1, -1));
+        j.buildAndAssertSuccess(project); // #1
+        project.getPublishersList().replaceBy(Set.of(new TestsFail()));
+        j.buildAndAssertStatus(Result.UNSTABLE, project); // #2
+        j.buildAndAssertStatus(Result.UNSTABLE, project); // #3
         assertEquals(1, numberOf(project.getLastStableBuild()));
         project.getPublishersList().replaceBy(Collections.emptySet());
-        assertEquals(Result.SUCCESS, build(project)); // #4
+        j.buildAndAssertSuccess(project); // #4
         assertNull(project.getBuildByNumber(1));
         assertNull(project.getBuildByNumber(2));
+    }
+
+    @Test
+    public void stableVsUnstableWithRemoveLastBuild() throws Exception {
+        FreeStyleProject project = j.createFreeStyleProject();
+        LogRotator logRotator = new LogRotator(-1, 1, -1, -1);
+        logRotator.setRemoveLastBuild(true);
+        project.setBuildDiscarder(logRotator);
+        j.buildAndAssertSuccess(project); // #1
+        project.getPublishersList().replaceBy(Set.of(new TestsFail()));
+        j.buildAndAssertStatus(Result.UNSTABLE, project); // #2
+        project.getBuildersList().replaceBy(Set.of(new FailureBuilder()));
+        j.buildAndAssertStatus(Result.FAILURE, project); // #3
+        assertNull(project.getBuildByNumber(1));
+        assertNull(project.getBuildByNumber(2));
+        assertEquals(-1, numberOf(project.getLastSuccessfulBuild()));
+        assertEquals(3, numberOf(project.getLastBuild()));
     }
 
     @Test
     @Issue("JENKINS-834")
     public void artifactDelete() throws Exception {
         FreeStyleProject project = j.createFreeStyleProject();
-        project.setLogRotator(new LogRotator(-1, 6, -1, 2));
-        project.getPublishersList().replaceBy(Collections.singleton(new ArtifactArchiver("f", "", true, false)));
-        assertEquals("(no artifacts)", Result.FAILURE, build(project)); // #1
+        project.setBuildDiscarder(new LogRotator(-1, 6, -1, 2));
+        project.getPublishersList().replaceBy(Set.of(new ArtifactArchiver("f", "", true, false)));
+        j.buildAndAssertStatus(Result.FAILURE, project); // #1
         assertFalse(project.getBuildByNumber(1).getHasArtifacts());
-        project.getBuildersList().replaceBy(Collections.singleton(new CreateArtifact()));
-        assertEquals(Result.SUCCESS, build(project)); // #2
+        project.getBuildersList().replaceBy(Set.of(new CreateArtifact()));
+        j.buildAndAssertSuccess(project); // #2
         assertTrue(project.getBuildByNumber(2).getHasArtifacts());
         project.getBuildersList().replaceBy(Arrays.asList(new CreateArtifact(), new FailureBuilder()));
-        assertEquals(Result.FAILURE, build(project)); // #3
+        j.buildAndAssertStatus(Result.FAILURE, project); // #3
         assertTrue(project.getBuildByNumber(2).getHasArtifacts());
         assertTrue(project.getBuildByNumber(3).getHasArtifacts());
-        assertEquals(Result.FAILURE, build(project)); // #4
+        j.buildAndAssertStatus(Result.FAILURE, project); // #4
         assertTrue(project.getBuildByNumber(2).getHasArtifacts());
         assertTrue(project.getBuildByNumber(3).getHasArtifacts());
         assertTrue(project.getBuildByNumber(4).getHasArtifacts());
-        assertEquals(Result.FAILURE, build(project)); // #5
+        j.buildAndAssertStatus(Result.FAILURE, project); // #5
         assertTrue(project.getBuildByNumber(2).getHasArtifacts());
         assertFalse("no better than #4", project.getBuildByNumber(3).getHasArtifacts());
         assertTrue(project.getBuildByNumber(4).getHasArtifacts());
         assertTrue(project.getBuildByNumber(5).getHasArtifacts());
-        project.getBuildersList().replaceBy(Collections.singleton(new CreateArtifact()));
-        assertEquals(Result.SUCCESS, build(project)); // #6
+        project.getBuildersList().replaceBy(Set.of(new CreateArtifact()));
+        j.buildAndAssertSuccess(project); // #6
         assertFalse("#2 is still lastSuccessful until #6 is complete", project.getBuildByNumber(2).getHasArtifacts());
         assertFalse(project.getBuildByNumber(3).getHasArtifacts());
         assertFalse(project.getBuildByNumber(4).getHasArtifacts());
         assertTrue(project.getBuildByNumber(5).getHasArtifacts());
         assertTrue(project.getBuildByNumber(6).getHasArtifacts());
-        assertEquals(Result.SUCCESS, build(project)); // #7
+        j.buildAndAssertSuccess(project); // #7
         assertNull(project.getBuildByNumber(1));
         assertNotNull(project.getBuildByNumber(2));
         assertFalse("lastSuccessful was #6 for ArtifactArchiver", project.getBuildByNumber(2).getHasArtifacts());
@@ -136,7 +184,7 @@ public class LogRotatorTest {
         assertFalse(project.getBuildByNumber(5).getHasArtifacts());
         assertTrue(project.getBuildByNumber(6).getHasArtifacts());
         assertTrue(project.getBuildByNumber(7).getHasArtifacts());
-        assertEquals(Result.SUCCESS, build(project)); // #8
+        j.buildAndAssertSuccess(project); // #8
         assertNull(project.getBuildByNumber(2));
         assertNotNull(project.getBuildByNumber(3));
         assertFalse(project.getBuildByNumber(3).getHasArtifacts());
@@ -146,7 +194,7 @@ public class LogRotatorTest {
         assertTrue(project.getBuildByNumber(7).getHasArtifacts());
         assertTrue(project.getBuildByNumber(8).getHasArtifacts());
     }
-    
+
     @Test
     @Issue("JENKINS-27836")
     public void artifactsRetainedWhileBuilding() throws Exception {
@@ -179,7 +227,7 @@ public class LogRotatorTest {
         assertThat("run1 is last stable build", p.getLastStableBuild(), is(run1));
         assertThat("run1 is last successful build", p.getLastSuccessfulBuild(), is(run1));
         assertThat("we have artifacts in run1", run1.getHasArtifacts(), is(true));
-        assertThat("CRITICAL ASSERTION: we have artifacts in run2", run2.getHasArtifacts(), is(true)); 
+        assertThat("CRITICAL ASSERTION: we have artifacts in run2", run2.getHasArtifacts(), is(true));
         assertThat("we have artifacts in run3", run3.getHasArtifacts(), is(true));
         sync.release(run2.getNumber());
         futureRun2.get();
@@ -200,17 +248,13 @@ public class LogRotatorTest {
         assertThat("we have artifacts in run3", run3.getHasArtifacts(), is(true));
     }
 
-    static Result build(FreeStyleProject project) throws Exception {
-        return project.scheduleBuild2(0).get().getResult();
-    }
-
-    private static int numberOf(Run<?,?> run) {
+    private static int numberOf(Run<?, ?> run) {
         return run != null ? run.getNumber() : -1;
     }
 
     static class TestsFail extends Publisher {
         @Override
-        public boolean perform(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener) {
+        public boolean perform(AbstractBuild<?, ?> build, Launcher launcher, BuildListener listener) {
             build.setResult(Result.UNSTABLE);
             return true;
         }
@@ -222,24 +266,24 @@ public class LogRotatorTest {
 
         @Override
         public Descriptor<Publisher> getDescriptor() {
-            return new Descriptor<Publisher>(TestsFail.class) {};
+            return new Descriptor<>(TestsFail.class) {};
         }
     }
-    
+
     public static class StallBuilder extends TestBuilder {
-        
+
         private int syncBuildNumber;
-        
+
         private final Object syncLock = new Object();
-        
+
         private int waitBuildNumber;
-        
+
         private final Object waitLock = new Object();
-        
+
         private final ArtifactArchiver archiver = new ArtifactArchiver("f");
 
         @Override
-        public boolean perform(AbstractBuild<?,?> build, Launcher launcher, BuildListener listener)
+        public boolean perform(AbstractBuild<?, ?> build, Launcher launcher, BuildListener listener)
                 throws IOException, InterruptedException {
             archiver.perform(build, launcher, listener);
             Logger.getAnonymousLogger().log(Level.INFO, "Building #{0}", build.getNumber());
@@ -263,7 +307,7 @@ public class LogRotatorTest {
             Logger.getAnonymousLogger().log(Level.INFO, "Done #{0}", build.getNumber());
             return true;
         }
-        
+
         public void release(int upToBuildNumber) {
             synchronized (syncLock) {
                 if (syncBuildNumber < upToBuildNumber) {
@@ -273,7 +317,7 @@ public class LogRotatorTest {
                 }
             }
         }
-        
+
         public void waitFor(int buildNumber, long timeout, TimeUnit units) throws TimeoutException,
                 InterruptedException {
             long giveUp = System.nanoTime() + units.toNanos(timeout);
@@ -283,7 +327,7 @@ public class LogRotatorTest {
                     if (remaining < 0) {
                         throw new TimeoutException();
                     }
-                    waitLock.wait(remaining/1000000L, (int)(remaining%1000000L));
+                    waitLock.wait(remaining / 1000000L, (int) (remaining % 1000000L));
                 }
             }
         }
