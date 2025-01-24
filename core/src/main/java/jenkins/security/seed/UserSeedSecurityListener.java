@@ -21,17 +21,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package jenkins.security.seed;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.model.User;
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSession;
 import jenkins.security.SecurityListener;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.Stapler;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 import org.springframework.security.core.userdetails.UserDetails;
 
 /**
@@ -41,18 +42,18 @@ import org.springframework.security.core.userdetails.UserDetails;
 @Restricted(NoExternalUse.class)
 @Extension(ordinal = Integer.MAX_VALUE)
 public class UserSeedSecurityListener extends SecurityListener {
-    @Override 
+    @Override
     protected void loggedIn(@NonNull String username) {
         putUserSeedInSession(username, true);
     }
-    
-    @Override 
+
+    @Override
     protected void authenticated2(@NonNull UserDetails details) {
         putUserSeedInSession(details.getUsername(), false);
     }
 
     private static void putUserSeedInSession(String username, boolean overwriteSessionSeed) {
-        StaplerRequest req = Stapler.getCurrentRequest();
+        StaplerRequest2 req = Stapler.getCurrentRequest2();
         if (req == null) {
             // expected case: CLI
             // But also HudsonPrivateSecurityRealm because of a redirect from Spring Security, the request is not a Stapler one
@@ -62,7 +63,7 @@ public class UserSeedSecurityListener extends SecurityListener {
         HttpSession session = req.getSession(false);
         if (session == null) {
             // expected case: CLI through CLIRegisterer
-            return; 
+            return;
         }
 
         if (!UserSeedProperty.DISABLE_USER_SEED) {

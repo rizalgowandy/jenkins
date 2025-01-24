@@ -24,21 +24,22 @@
 
 package lib.layout;
 
-import com.gargoylesoftware.htmlunit.html.DomElement;
-import com.gargoylesoftware.htmlunit.html.HtmlLink;
+import org.htmlunit.html.DomElement;
+import org.htmlunit.html.HtmlLink;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
 import org.jvnet.hudson.test.JenkinsRule;
-import org.jvnet.hudson.test.recipes.PresetData;
+import org.jvnet.hudson.test.MockAuthorizationStrategy;
 
 public class LayoutTest {
 
     @Rule public JenkinsRule r = new JenkinsRule();
 
     @Issue("JENKINS-21254")
-    @PresetData(PresetData.DataSet.NO_ANONYMOUS_READACCESS)
     @Test public void rejectedLinks() throws Exception {
+        r.jenkins.setSecurityRealm(r.createDummySecurityRealm());
+        r.jenkins.setAuthorizationStrategy(new MockAuthorizationStrategy());
         JenkinsRule.WebClient wc = r.createWebClient();
         String prefix = r.contextPath + '/';
         for (DomElement e : wc.goTo("login").getElementsByTagName("link")) {
@@ -50,6 +51,11 @@ public class LayoutTest {
             System.err.println("checking " + href);
             wc.goTo(href.substring(prefix.length()), null);
         }
+    }
+
+    @Test public void fullScreen() throws Exception {
+        // Example page using <l:layout type="full-screen">:
+        r.createWebClient().goTo("setupWizard/proxy-configuration");
     }
 
 }

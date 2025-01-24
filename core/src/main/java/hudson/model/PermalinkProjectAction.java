@@ -1,18 +1,18 @@
 /*
  * The MIT License
- * 
+ *
  * Copyright (c) 2004-2009, Sun Microsystems, Inc., Kohsuke Kawaguchi
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,10 +21,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model;
 
 import edu.umd.cs.findbugs.annotations.CheckForNull;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import jenkins.model.PeepholePermalink;
@@ -51,7 +51,7 @@ public interface PermalinkProjectAction extends Action {
      * <p>
      * Because {@link Permalink} is a strategy-pattern object,
      * this method should normally return a pre-initialized
-     * read-only static list object.  
+     * read-only static list object.
      *
      * @return
      *      can be empty, but never null.
@@ -87,7 +87,7 @@ public interface PermalinkProjectAction extends Action {
          * @return null
          *      if the target of the permalink doesn't exist.
          */
-        public abstract @CheckForNull Run<?,?> resolve(Job<?,?> job);
+        public abstract @CheckForNull Run<?, ?> resolve(Job<?, ?> job);
 
         /**
          * List of {@link Permalink}s that are built into Jenkins.
@@ -106,118 +106,37 @@ public interface PermalinkProjectAction extends Action {
             }
 
             @Override
-            public Run<?,?> resolve(Job<?,?> job) {
+            public Run<?, ?> resolve(Job<?, ?> job) {
                 return job.getLastBuild();
             }
         };
-        public static final Permalink LAST_STABLE_BUILD = new PeepholePermalink() {
-            @Override
-            public String getDisplayName() {
-                return Messages.Permalink_LastStableBuild();
-            }
 
-            @Override
-            public String getId() {
-                return "lastStableBuild";
-            }
+        /** @deprecated use {@link PeepholePermalink#LAST_STABLE_BUILD} */
+        @Deprecated
+        public static Permalink LAST_STABLE_BUILD;
 
-            @Override
-            public boolean apply(Run<?, ?> run) {
-                return !run.isBuilding() && run.getResult()==Result.SUCCESS;
-            }
-        };
-        public static final Permalink LAST_SUCCESSFUL_BUILD = new PeepholePermalink() {
-            @Override
-            public String getDisplayName() {
-                return Messages.Permalink_LastSuccessfulBuild();
-            }
+        /** @deprecated use {@link PeepholePermalink#LAST_SUCCESSFUL_BUILD} */
+        @Deprecated
+        public static Permalink LAST_SUCCESSFUL_BUILD;
 
-            @Override
-            public String getId() {
-                return "lastSuccessfulBuild";
-            }
+        /** @deprecated use {@link PeepholePermalink#LAST_FAILED_BUILD} */
+        @Deprecated
+        public static Permalink LAST_FAILED_BUILD;
 
-            @SuppressFBWarnings(value = "NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE", justification = "TODO needs triage")
-            @Override
-            public boolean apply(Run<?, ?> run) {
-                return !run.isBuilding() && run.getResult().isBetterOrEqualTo(Result.UNSTABLE);
-            }
-        };
-        public static final Permalink LAST_FAILED_BUILD = new PeepholePermalink() {
-            @Override
-            public String getDisplayName() {
-                return Messages.Permalink_LastFailedBuild();
-            }
+        /** @deprecated use {@link PeepholePermalink#LAST_UNSTABLE_BUILD} */
+        @Deprecated
+        public static Permalink LAST_UNSTABLE_BUILD;
 
-            @Override
-            public String getId() {
-                return "lastFailedBuild";
-            }
+        /** @deprecated use {@link PeepholePermalink#LAST_UNSUCCESSFUL_BUILD} */
+        @Deprecated
+        public static Permalink LAST_UNSUCCESSFUL_BUILD;
 
-            @Override
-            public boolean apply(Run<?, ?> run) {
-                return !run.isBuilding() && run.getResult()==Result.FAILURE;
-            }
-        };
-
-        public static final Permalink LAST_UNSTABLE_BUILD = new PeepholePermalink() {
-            @Override
-            public String getDisplayName() {
-                return Messages.Permalink_LastUnstableBuild();
-            }
-
-            @Override
-            public String getId() {
-                return "lastUnstableBuild";
-            }
-
-            @Override
-            public boolean apply(Run<?, ?> run) {
-                return !run.isBuilding() && run.getResult()==Result.UNSTABLE;
-            }
-        };
-
-        public static final Permalink LAST_UNSUCCESSFUL_BUILD = new PeepholePermalink() {
-            @Override
-            public String getDisplayName() {
-                return Messages.Permalink_LastUnsuccessfulBuild();
-            }
-
-            @Override
-            public String getId() {
-                return "lastUnsuccessfulBuild";
-            }
-
-            @Override
-            public boolean apply(Run<?, ?> run) {
-                return !run.isBuilding() && run.getResult()!=Result.SUCCESS;
-            }
-        };
-        public static final Permalink LAST_COMPLETED_BUILD = new PeepholePermalink() {
-            @Override
-            public String getDisplayName() {
-                return Messages.Permalink_LastCompletedBuild();
-            }
-
-            @Override
-            public String getId() {
-                return "lastCompletedBuild";
-            }
-
-            @Override
-            public boolean apply(Run<?, ?> run) {
-                return !run.isBuilding();
-            }
-        };
+        /** @deprecated use {@link PeepholePermalink#LAST_COMPLETED_BUILD} */
+        @Deprecated
+        public static Permalink LAST_COMPLETED_BUILD;
 
         static {
             BUILTIN.add(LAST_BUILD);
-            BUILTIN.add(LAST_STABLE_BUILD);
-            BUILTIN.add(LAST_SUCCESSFUL_BUILD);
-            BUILTIN.add(LAST_FAILED_BUILD);
-            BUILTIN.add(LAST_UNSTABLE_BUILD);
-            BUILTIN.add(LAST_UNSUCCESSFUL_BUILD);
-            BUILTIN.add(LAST_COMPLETED_BUILD);
         }
     }
 }

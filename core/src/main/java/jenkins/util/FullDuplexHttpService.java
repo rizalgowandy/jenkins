@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package jenkins.util;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -29,6 +30,8 @@ import hudson.model.RootAction;
 import hudson.security.csrf.CrumbExclusion;
 import hudson.util.ChunkedInputStream;
 import hudson.util.ChunkedOutputStream;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -37,13 +40,11 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletResponse;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.HttpResponses;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 
 /**
  * Server-side counterpart to {@link FullDuplexHttpStream}.
@@ -85,7 +86,7 @@ public abstract class FullDuplexHttpService {
      * <p>
      * If this connection is lost, we'll abort the channel.
      */
-    public synchronized void download(StaplerRequest req, StaplerResponse rsp) throws InterruptedException, IOException {
+    public synchronized void download(StaplerRequest2 req, StaplerResponse2 rsp) throws InterruptedException, IOException {
         rsp.setStatus(HttpServletResponse.SC_OK);
 
         // server->client channel.
@@ -100,7 +101,7 @@ public abstract class FullDuplexHttpService {
         out.write(0);
         out.flush();
 
-        {// wait until we have the other channel
+        { // wait until we have the other channel
             long end = System.currentTimeMillis() + CONNECTION_TIMEOUT;
             while (upload == null && System.currentTimeMillis() < end) {
                 LOGGER.log(Level.FINE, "Waiting for upload stream for {0}: {1}", new Object[] {uuid, this});
@@ -128,7 +129,7 @@ public abstract class FullDuplexHttpService {
     /**
      * This is where we receive inputs from the client.
      */
-    public synchronized void upload(StaplerRequest req, StaplerResponse rsp) throws InterruptedException, IOException {
+    public synchronized void upload(StaplerRequest2 req, StaplerResponse2 rsp) throws InterruptedException, IOException {
         rsp.setStatus(HttpServletResponse.SC_OK);
         InputStream in = req.getInputStream();
         if (DIY_CHUNKING) {
@@ -162,7 +163,7 @@ public abstract class FullDuplexHttpService {
         }
 
         @Override
-        public void generateResponse(StaplerRequest req, StaplerResponse rsp, Object node) throws IOException, ServletException {
+        public void generateResponse(StaplerRequest2 req, StaplerResponse2 rsp, Object node) throws IOException, ServletException {
             try {
                 // do not require any permission to establish a CLI connection
                 // the actual authentication for the connecting Channel is done by CLICommand
@@ -197,7 +198,7 @@ public abstract class FullDuplexHttpService {
             }
         }
 
-        protected abstract FullDuplexHttpService createService(StaplerRequest req, UUID uuid) throws IOException, InterruptedException;
+        protected abstract FullDuplexHttpService createService(StaplerRequest2 req, UUID uuid) throws IOException, InterruptedException;
 
     }
 

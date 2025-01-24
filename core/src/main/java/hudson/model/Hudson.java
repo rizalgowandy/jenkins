@@ -23,6 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model;
 
 import static hudson.Util.fixEmpty;
@@ -37,14 +38,16 @@ import hudson.model.listeners.ItemListener;
 import hudson.slaves.ComputerListener;
 import hudson.util.CopyOnWriteList;
 import hudson.util.FormValidation;
+import io.jenkins.servlet.ServletContextWrapper;
+import io.jenkins.servlet.ServletExceptionWrapper;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
 import java.text.NumberFormat;
 import java.text.ParseException;
 import java.util.List;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletResponse;
 import jenkins.model.Jenkins;
 import org.jvnet.hudson.reactor.ReactorException;
 import org.kohsuke.stapler.QueryParameter;
@@ -74,15 +77,37 @@ public class Hudson extends Jenkins {
     @CLIResolver
     @Nullable
     public static Hudson getInstance() {
-        return (Hudson)Jenkins.get();
+        return (Hudson) Jenkins.get();
     }
 
+    /**
+     * @since 2.475
+     */
     public Hudson(File root, ServletContext context) throws IOException, InterruptedException, ReactorException {
-        this(root,context,null);
+        this(root, context, null);
     }
 
+    /**
+     * @deprecated use {@link #Hudson(File, ServletContext)}
+     */
+    @Deprecated
+    public Hudson(File root, javax.servlet.ServletContext context) throws IOException, InterruptedException, ReactorException {
+        this(root, ServletContextWrapper.toJakartaServletContext(context));
+    }
+
+    /**
+     * @since 2.475
+     */
     public Hudson(File root, ServletContext context, PluginManager pluginManager) throws IOException, InterruptedException, ReactorException {
         super(root, context, pluginManager);
+    }
+
+    /**
+     * @deprecated use {@link #Hudson(File, ServletContext, PluginManager)}
+     */
+    @Deprecated
+    public Hudson(File root, javax.servlet.ServletContext context, PluginManager pluginManager) throws IOException, InterruptedException, ReactorException {
+        this(root, ServletContextWrapper.toJakartaServletContext(context), pluginManager);
     }
 
     /**
@@ -117,7 +142,7 @@ public class Hudson extends Jenkins {
     public Slave getSlave(String name) {
         Node n = getNode(name);
         if (n instanceof Slave)
-            return (Slave)n;
+            return (Slave) n;
         return null;
     }
 
@@ -127,7 +152,7 @@ public class Hudson extends Jenkins {
      */
     @Deprecated
     public List<Slave> getSlaves() {
-        return (List)getNodes();
+        return (List) getNodes();
     }
 
     /**
@@ -158,8 +183,8 @@ public class Hudson extends Jenkins {
     @Deprecated
     public TopLevelItem getJobCaseInsensitive(String name) {
         String match = Functions.toEmailSafeString(name);
-        for(TopLevelItem item : getItems()) {
-            if(Functions.toEmailSafeString(item.getName()).equalsIgnoreCase(match)) {
+        for (TopLevelItem item : getItems()) {
+            if (Functions.toEmailSafeString(item.getName()).equalsIgnoreCase(match)) {
         return item;
     }
                 }
@@ -172,8 +197,12 @@ public class Hudson extends Jenkins {
      */
     @Deprecated
     @RequirePOST
-    public synchronized void doQuietDown(StaplerResponse rsp) throws IOException, ServletException {
-        doQuietDown().generateResponse(null, rsp, this);
+    public synchronized void doQuietDown(StaplerResponse rsp) throws IOException, javax.servlet.ServletException {
+        try {
+            doQuietDown().generateResponse(null, StaplerResponse.toStaplerResponse2(rsp), this);
+        } catch (ServletException e) {
+            throw ServletExceptionWrapper.fromJakartaServletException(e);
+        }
     }
 
     /**
@@ -183,9 +212,9 @@ public class Hudson extends Jenkins {
      *   As on 1.267, moved to "/log/rss..."
      */
     @Deprecated
-    public void doLogRss( StaplerRequest req, StaplerResponse rsp ) throws IOException, ServletException {
+    public void doLogRss(StaplerRequest req, StaplerResponse rsp) throws IOException, javax.servlet.ServletException {
         String qs = req.getQueryString();
-        rsp.sendRedirect2("./log/rss"+(qs==null?"":'?'+qs));
+        rsp.sendRedirect2("./log/rss" + (qs == null ? "" : '?' + qs));
     }
 
     /**
@@ -193,12 +222,12 @@ public class Hudson extends Jenkins {
      *      Define your own check method, instead of relying on this generic one.
      */
     @Deprecated
-    public void doFieldCheck(StaplerRequest req, StaplerResponse rsp) throws IOException, ServletException {
+    public void doFieldCheck(StaplerRequest req, StaplerResponse rsp) throws IOException, javax.servlet.ServletException {
         doFieldCheck(
                 fixEmpty(req.getParameter("value")),
                 fixEmpty(req.getParameter("type")),
                 fixEmpty(req.getParameter("errorText")),
-                fixEmpty(req.getParameter("warningText"))).generateResponse(req,rsp,this);
+                fixEmpty(req.getParameter("warningText"))).generateResponse(req, rsp, this);
     }
 
     /**
@@ -215,10 +244,10 @@ public class Hudson extends Jenkins {
      *      or define your own check method, instead of relying on this generic one.
      */
     @Deprecated
-    public FormValidation doFieldCheck(@QueryParameter(fixEmpty=true) String value,
-                                       @QueryParameter(fixEmpty=true) String type,
-                                       @QueryParameter(fixEmpty=true) String errorText,
-                                       @QueryParameter(fixEmpty=true) String warningText) {
+    public FormValidation doFieldCheck(@QueryParameter(fixEmpty = true) String value,
+                                       @QueryParameter(fixEmpty = true) String type,
+                                       @QueryParameter(fixEmpty = true) String errorText,
+                                       @QueryParameter(fixEmpty = true) String warningText) {
         if (value == null) {
             if (errorText != null)
                 return FormValidation.error(errorText);
@@ -252,7 +281,7 @@ public class Hudson extends Jenkins {
      */
     @Deprecated
     public static boolean isWindows() {
-        return File.pathSeparatorChar==';';
+        return File.pathSeparatorChar == ';';
     }
 
     /**
@@ -278,7 +307,7 @@ public class Hudson extends Jenkins {
      *      Use {@link #checkPermission(hudson.security.Permission)}
      */
     @Deprecated
-    public static boolean adminCheck(StaplerRequest req,StaplerResponse rsp) throws IOException {
+    public static boolean adminCheck(StaplerRequest req, StaplerResponse rsp) throws IOException {
         if (isAdmin(req)) return true;
 
         rsp.sendError(HttpServletResponse.SC_FORBIDDEN);
@@ -319,7 +348,7 @@ public class Hudson extends Jenkins {
     }
 
     static {
-        XSTREAM.alias("hudson",Hudson.class);
+        XSTREAM.alias("hudson", Hudson.class);
     }
 
     /**

@@ -4,6 +4,7 @@ import edu.umd.cs.findbugs.annotations.CheckForNull;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.Extension;
 import hudson.Util;
+import hudson.model.userproperty.UserPropertyCategory;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
 import hudson.util.ListBoxModel.Option;
@@ -46,6 +47,11 @@ public class TimeZoneProperty extends UserProperty {
         this.timeZoneName = timeZoneName;
     }
 
+    @CheckForNull
+    public String getTimeZoneName() {
+        return timeZoneName;
+    }
+
     @Extension
     @Symbol("timezone")
     public static class DescriptorImpl extends UserPropertyDescriptor {
@@ -54,6 +60,11 @@ public class TimeZoneProperty extends UserProperty {
         @Override
         public String getDisplayName() {
             return Messages.TimeZoneProperty_DisplayName();
+        }
+
+        @Override
+        public String getDescription() {
+            return Messages.TimeZoneProperty_Description();
         }
 
         @Override
@@ -101,6 +112,10 @@ public class TimeZoneProperty extends UserProperty {
             }
         }
 
+        @Override
+        public @NonNull UserPropertyCategory getUserPropertyCategory() {
+            return UserPropertyCategory.get(UserPropertyCategory.Account.class);
+        }
     }
 
     @CheckForNull

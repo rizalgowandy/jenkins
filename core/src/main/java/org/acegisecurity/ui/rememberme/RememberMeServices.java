@@ -24,8 +24,8 @@
 
 package org.acegisecurity.ui.rememberme;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.acegisecurity.Authentication;
 
 /**
@@ -50,10 +50,12 @@ public interface RememberMeServices {
                 org.springframework.security.core.Authentication a = rms.autoLogin(request, response);
                 return a != null ? Authentication.fromSpring(a) : null;
             }
+
             @Override
             public void loginFail(HttpServletRequest request, HttpServletResponse response) {
                 rms.loginFail(request, response);
             }
+
             @Override
             public void loginSuccess(HttpServletRequest request, HttpServletResponse response, Authentication successfulAuthentication) {
                 rms.loginSuccess(request, response, successfulAuthentication.toSpring());

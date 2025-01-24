@@ -10,12 +10,11 @@ import hudson.views.ViewsTabBar;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 import org.mockito.Mockito;
 
 public class ViewTest {
@@ -30,7 +29,7 @@ public class ViewTest {
         final String displayName1 = "displayName1";
         final String url2 = "url2";
         final String displayName2 = "displayName2";
-        
+
         SearchIndexBuilder sib = new SearchIndexBuilder();
         // mock the items to be indexed
         TopLevelItem item1 = Mockito.mock(TopLevelItem.class);
@@ -42,7 +41,7 @@ public class ViewTest {
         Collection<TopLevelItem> items = new ArrayList<>();
         items.add(item1);
         items.add(item2);
-        
+
         // mock the view class except for the addDisplayNamesToSearchIndex() call as that
         // is what we are testing
         View view = Mockito.mock(View.class);
@@ -51,9 +50,9 @@ public class ViewTest {
         // now make the actual call to index items
         view.addDisplayNamesToSearchIndex(sib, items);
 
-        // make and index with sib 
+        // make and index with sib
         SearchIndex index = sib.make();
-        
+
         // now make sure we can fetch item1 from the index
         List<SearchItem> result = new ArrayList<>();
         index.find(displayName1, result);
@@ -87,14 +86,14 @@ public class ViewTest {
 
         final TopLevelItem rootJob = createJob("rootJob");
         final TopLevelItem sharedJob = createJob("sharedJob");
-        
+
         rootView = rootView.withJobs(rootJob, sharedJob);
-        
+
         final TopLevelItem leftJob = createJob("leftJob");
         final TopLevelItem rightJob = createJob("rightJob");
 
         Mockito.when(leftView.getItems()).thenReturn(Arrays.asList(leftJob, sharedJob));
-        Mockito.when(rightView.getItems()).thenReturn(Collections.singletonList(rightJob));
+        Mockito.when(rightView.getItems()).thenReturn(List.of(rightJob));
 
         final TopLevelItem[] expected = new TopLevelItem[] {rootJob, sharedJob, leftJob, rightJob};
 
@@ -132,12 +131,12 @@ public class ViewTest {
             super(name);
             this.views = views;
         }
-        
+
         private CompositeView withJobs(TopLevelItem... jobs) {
             this.jobs = jobs;
             return this;
         }
-        
+
         @Override
         public Collection<TopLevelItem> getItems() {
             return Arrays.asList(this.jobs);
@@ -147,7 +146,7 @@ public class ViewTest {
         public Collection<View> getViews() {
             return Arrays.asList(this.views);
         }
-        
+
         @Override
         public boolean canDelete(View view) {
             return false;
@@ -187,11 +186,11 @@ public class ViewTest {
         }
 
         @Override
-        protected void submit(StaplerRequest req) {
+        protected void submit(StaplerRequest2 req) {
         }
 
         @Override
-        public Item doCreateItem(StaplerRequest req, StaplerResponse rsp) {
+        public Item doCreateItem(StaplerRequest2 req, StaplerResponse2 rsp) {
             return null;
         }
     }

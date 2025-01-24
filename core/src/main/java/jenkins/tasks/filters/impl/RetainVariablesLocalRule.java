@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package jenkins.tasks.filters.impl;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
@@ -40,7 +41,6 @@ import jenkins.tasks.filters.EnvVarsFilterLocalRule;
 import jenkins.tasks.filters.EnvVarsFilterLocalRuleDescriptor;
 import jenkins.tasks.filters.EnvVarsFilterRuleContext;
 import jenkins.tasks.filters.EnvVarsFilterableBuilder;
-import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.Symbol;
 import org.jvnet.localizer.Localizable;
 import org.kohsuke.accmod.Restricted;
@@ -86,7 +86,7 @@ public class RetainVariablesLocalRule implements EnvVarsFilterLocalRule {
         String[] variablesArray = variablesCommaSeparated.split("\\s+");
         List<String> variables = new ArrayList<>();
         for (String nameFragment : variablesArray) {
-            if (StringUtils.isNotBlank(nameFragment)) {
+            if (nameFragment != null && !nameFragment.isBlank()) {
                 variables.add(nameFragment.toLowerCase(Locale.ENGLISH));
             }
         }

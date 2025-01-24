@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.slaves;
 
 
@@ -63,7 +64,7 @@ public class CloudRetentionStrategy extends RetentionStrategy<AbstractCloudCompu
                 }
             }
         }
-        return 1;
+        return 0;
     }
 
     /**
@@ -77,5 +78,5 @@ public class CloudRetentionStrategy extends RetentionStrategy<AbstractCloudCompu
     private static final Logger LOGGER = Logger.getLogger(CloudRetentionStrategy.class.getName());
 
     @SuppressFBWarnings(value = "MS_SHOULD_BE_FINAL", justification = "Accessible via System Groovy Scripts")
-    public static boolean disabled = SystemProperties.getBoolean(CloudRetentionStrategy.class.getName()+".disabled");
+    public static boolean disabled = SystemProperties.getBoolean(CloudRetentionStrategy.class.getName() + ".disabled");
 }

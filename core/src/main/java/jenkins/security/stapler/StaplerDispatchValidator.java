@@ -28,6 +28,7 @@ import com.google.common.annotations.VisibleForTesting;
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import jakarta.servlet.ServletContext;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -50,7 +51,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.servlet.ServletContext;
+import jenkins.YesNoMaybe;
 import jenkins.model.Jenkins;
 import jenkins.util.SystemProperties;
 import org.apache.commons.io.IOUtils;
@@ -58,8 +59,8 @@ import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.CancelRequestHandlingException;
 import org.kohsuke.stapler.DispatchValidator;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 import org.kohsuke.stapler.WebApp;
 
 /**
@@ -93,18 +94,29 @@ public class StaplerDispatchValidator implements DispatchValidator {
     @SuppressFBWarnings(value = "MS_SHOULD_BE_FINAL", justification = "for script console")
     public static /* script-console editable */ boolean DISABLED = SystemProperties.getBoolean(ESCAPE_HATCH);
 
-    private static @CheckForNull Boolean setStatus(@NonNull StaplerRequest req, @CheckForNull Boolean status) {
-        if (status == null) {
-            return null;
+    @NonNull
+    private static YesNoMaybe setStatus(@NonNull StaplerRequest2 req, @NonNull YesNoMaybe status) {
+        switch (status) {
+            case YES:
+            case NO:
+                LOGGER.fine(() -> "Request dispatch set status to " + status.toBool() + " for URL " + req.getPathInfo());
+                req.setAttribute(ATTRIBUTE_NAME, status.toBool());
+                return status;
+            case MAYBE:
+                return status;
+            default:
+                throw new IllegalStateException("Unexpected value: " + status);
         }
-        LOGGER.fine(() -> "Request dispatch set status to " + status + " for URL " + req.getPathInfo());
-        req.setAttribute(ATTRIBUTE_NAME, status);
-        return status;
     }
 
-    private static @CheckForNull Boolean computeStatusIfNull(@NonNull StaplerRequest req, @NonNull Supplier<Boolean> statusIfNull) {
+    @NonNull
+    private static YesNoMaybe computeStatusIfNull(@NonNull StaplerRequest2 req, @NonNull Supplier<YesNoMaybe> statusIfNull) {
         Object requestStatus = req.getAttribute(ATTRIBUTE_NAME);
-        return requestStatus instanceof Boolean ? (Boolean) requestStatus : setStatus(req, statusIfNull.get());
+        if (requestStatus instanceof Boolean) {
+            return (Boolean) requestStatus ? YesNoMaybe.YES : YesNoMaybe.NO;
+        } else {
+            return setStatus(req, statusIfNull.get());
+        }
     }
 
     private final ValidatorCache cache;
@@ -115,51 +127,51 @@ public class StaplerDispatchValidator implements DispatchValidator {
     }
 
     @Override
-    public @CheckForNull Boolean isDispatchAllowed(@NonNull StaplerRequest req, @NonNull StaplerResponse rsp) {
+    public @CheckForNull Boolean isDispatchAllowed(@NonNull StaplerRequest2 req, @NonNull StaplerResponse2 rsp) {
         if (DISABLED) {
             return true;
         }
-        Boolean status = computeStatusIfNull(req, () -> {
+        YesNoMaybe status = computeStatusIfNull(req, () -> {
             if (rsp.getContentType() != null) {
-                return true;
+                return YesNoMaybe.YES;
             }
             if (rsp.getStatus() >= 300) {
-                return true;
+                return YesNoMaybe.YES;
             }
-            return null;
+            return YesNoMaybe.MAYBE;
         });
-        LOGGER.finer(() -> req.getRequestURI() + " -> " + status);
-        return status;
+        LOGGER.finer(() -> req.getRequestURI() + " -> " + status.toBool());
+        return status.toBool();
     }
 
     @Override
-    public @CheckForNull Boolean isDispatchAllowed(@NonNull StaplerRequest req, @NonNull StaplerResponse rsp, @NonNull String viewName, @CheckForNull Object node) {
+    public @CheckForNull Boolean isDispatchAllowed(@NonNull StaplerRequest2 req, @NonNull StaplerResponse2 rsp, @NonNull String viewName, @CheckForNull Object node) {
         if (DISABLED) {
             return true;
         }
-        Boolean status = computeStatusIfNull(req, () -> {
+        YesNoMaybe status = computeStatusIfNull(req, () -> {
             if (viewName.equals("index")) {
-                return true;
+                return YesNoMaybe.YES;
             }
             if (node == null) {
-                return null;
+                return YesNoMaybe.MAYBE;
             }
             return cache.find(node.getClass()).isViewValid(viewName);
         });
-        LOGGER.finer(() -> "<" + req.getRequestURI() + ", " + viewName + ", " + node + "> -> " + status);
-        return status;
+        LOGGER.finer(() -> "<" + req.getRequestURI() + ", " + viewName + ", " + node + "> -> " + status.toBool());
+        return status.toBool();
     }
 
     @Override
-    public void allowDispatch(@NonNull StaplerRequest req, @NonNull StaplerResponse rsp) {
+    public void allowDispatch(@NonNull StaplerRequest2 req, @NonNull StaplerResponse2 rsp) {
         if (DISABLED) {
             return;
         }
-        setStatus(req, true);
+        setStatus(req, YesNoMaybe.YES);
     }
 
     @Override
-    public void requireDispatchAllowed(@NonNull StaplerRequest req, @NonNull StaplerResponse rsp) throws CancelRequestHandlingException {
+    public void requireDispatchAllowed(@NonNull StaplerRequest2 req, @NonNull StaplerResponse2 rsp) throws CancelRequestHandlingException {
         if (DISABLED) {
             return;
         }
@@ -177,7 +189,7 @@ public class StaplerDispatchValidator implements DispatchValidator {
 
     @VisibleForTesting
     void loadWhitelist(@NonNull InputStream in) throws IOException {
-        cache.loadWhitelist(IOUtils.readLines(in));
+        cache.loadWhitelist(IOUtils.readLines(in, StandardCharsets.UTF_8));
     }
 
     private static class ValidatorCache {
@@ -268,7 +280,7 @@ public class StaplerDispatchValidator implements DispatchValidator {
             Path configFile = whitelist != null ? Paths.get(whitelist) : Jenkins.get().getRootDir().toPath().resolve("stapler-views-whitelist.txt");
             if (Files.exists(configFile)) {
                 try {
-                    loadWhitelist(Files.readAllLines(configFile));
+                    loadWhitelist(Files.readAllLines(configFile, StandardCharsets.UTF_8));
                 } catch (IOException e) {
                     LOGGER.log(Level.WARNING, e, () -> "Could not load user defined whitelist from " + configFile);
                 }
@@ -327,20 +339,21 @@ public class StaplerDispatchValidator implements DispatchValidator {
                 return parents;
             }
 
-            private @CheckForNull Boolean isViewValid(@NonNull String viewName) {
+            @NonNull
+            private YesNoMaybe isViewValid(@NonNull String viewName) {
                 if (allowed.contains(viewName)) {
-                    return Boolean.TRUE;
+                    return YesNoMaybe.YES;
                 }
                 if (denied.contains(viewName)) {
-                    return Boolean.FALSE;
+                    return YesNoMaybe.NO;
                 }
                 for (Validator parent : getParents()) {
-                    Boolean result = parent.isViewValid(viewName);
-                    if (result != null) {
+                    YesNoMaybe result = parent.isViewValid(viewName);
+                    if (!result.equals(YesNoMaybe.MAYBE)) {
                         return result;
                     }
                 }
-                return null;
+                return YesNoMaybe.MAYBE;
             }
 
             private void allowView(@NonNull String viewName) {

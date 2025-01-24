@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model.listeners;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -30,9 +31,11 @@ import static org.junit.Assert.assertNotNull;
 import hudson.cli.CLICommandInvoker;
 import hudson.model.Item;
 import java.io.ByteArrayInputStream;
+import java.nio.charset.Charset;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.jvnet.hudson.test.Issue;
 import org.jvnet.hudson.test.JenkinsRule;
 
 /**
@@ -52,9 +55,16 @@ public class ItemListenerTest {
             @Override public void onCreated(Item item) {
                 events.append('C');
             }
+
             @Override public void onCopied(Item src, Item item) {
                 events.append('Y');
             }
+
+            @Override
+            public void onUpdated(Item item) {
+                events.append('U');
+            }
+
         };
         ItemListener.all().add(0, listener);
     }
@@ -62,10 +72,24 @@ public class ItemListenerTest {
     @Test
     public void onCreatedViaCLI() {
         CLICommandInvoker.Result result = new CLICommandInvoker(j, "create-job").
-                withStdin(new ByteArrayInputStream("<project><actions/><builders/><publishers/><buildWrappers/></project>".getBytes())).
+                withStdin(new ByteArrayInputStream("<project><actions/><builders/><publishers/><buildWrappers/></project>".getBytes(Charset.defaultCharset()))).
                 invokeWithArgs("testJob");
         assertThat(result, CLICommandInvoker.Matcher.succeeded());
         assertNotNull("job should be created: " + result, j.jenkins.getItem("testJob"));
         assertEquals("onCreated event should be triggered: " + result, "C", events.toString());
+    }
+
+    @Issue("JENKINS-64553")
+    @Test
+    public void onUpdatedViaCLI() {
+        CLICommandInvoker.Result result = new CLICommandInvoker(j, "create-job").
+                withStdin(new ByteArrayInputStream("<project/>".getBytes(Charset.defaultCharset()))).
+                invokeWithArgs("testJob");
+        assertThat(result, CLICommandInvoker.Matcher.succeeded());
+        result = new CLICommandInvoker(j, "update-job").
+                withStdin(new ByteArrayInputStream("<project><actions/><builders/><publishers/><buildWrappers/></project>".getBytes(Charset.defaultCharset()))).
+                invokeWithArgs("testJob");
+        assertThat(result, CLICommandInvoker.Matcher.succeeded());
+        assertEquals("onUpdated event should be triggered: " + result, "CU", events.toString());
     }
 }

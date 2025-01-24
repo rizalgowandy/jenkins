@@ -1,18 +1,18 @@
 /*
  * The MIT License
- * 
+ *
  * Copyright (c) 2004-2009, Sun Microsystems, Inc., Kohsuke Kawaguchi
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,9 +21,15 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import hudson.Util;
 import hudson.model.Descriptor.FormException;
+import io.jenkins.servlet.ServletExceptionWrapper;
+import jakarta.servlet.ServletException;
+import java.io.File;
 import java.io.IOException;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -31,11 +37,12 @@ import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.servlet.ServletException;
 import jenkins.model.Jenkins;
 import jenkins.util.SystemProperties;
 import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerResponse2;
 
 /**
  * {@link Job} that monitors activities that happen outside Hudson,
@@ -46,8 +53,8 @@ import org.kohsuke.stapler.StaplerResponse;
  *
  * @author Kohsuke Kawaguchi
  */
-public abstract class ViewJob<JobT extends ViewJob<JobT,RunT>, RunT extends Run<JobT,RunT>>
-    extends Job<JobT,RunT> {
+public abstract class ViewJob<JobT extends ViewJob<JobT, RunT>, RunT extends Run<JobT, RunT>>
+    extends Job<JobT, RunT> {
 
     private static final Logger LOGGER = Logger.getLogger(ViewJob.class.getName());
 
@@ -60,7 +67,7 @@ public abstract class ViewJob<JobT extends ViewJob<JobT,RunT>, RunT extends Run<
     /**
      * All {@link Run}s. Copy-on-write semantics.
      */
-    protected transient volatile /*almost final*/ RunMap<RunT> runs = new RunMap<>(null, null);
+    protected transient volatile /*almost final*/ RunMap<RunT> runs = new RunMap<>((File) null, null);
 
     private transient volatile boolean notLoaded = true;
 
@@ -83,11 +90,11 @@ public abstract class ViewJob<JobT extends ViewJob<JobT,RunT>, RunT extends Run<
      */
     @Deprecated
     protected ViewJob(Jenkins parent, String name) {
-        super(parent,name);
+        super(parent, name);
     }
 
     protected ViewJob(ItemGroup parent, String name) {
-        super(parent,name);
+        super(parent, name);
     }
 
     @Override
@@ -102,20 +109,20 @@ public abstract class ViewJob<JobT extends ViewJob<JobT,RunT>, RunT extends Run<
     }
 
     @Override
-    protected SortedMap<Integer,RunT> _getRuns() {
-        if(notLoaded || runs==null) {
+    protected SortedMap<Integer, RunT> _getRuns() {
+        if (notLoaded || runs == null) {
             // if none is loaded yet, do so immediately.
-            synchronized(this) {
-                if(runs==null)
+            synchronized (this) {
+                if (runs == null)
                     runs = new RunMap<>();
-                if(notLoaded) {
+                if (notLoaded) {
                     notLoaded = false;
-                    _reload();   
+                    _reload();
                 }
             }
         }
-        if(nextUpdate<System.currentTimeMillis()) {
-            if(!reloadingInProgress) {
+        if (nextUpdate < System.currentTimeMillis()) {
+            if (!reloadingInProgress) {
                 // schedule a new reloading operation.
                 // we don't want to block the current thread,
                 // so reloading is done asynchronously.
@@ -128,7 +135,7 @@ public abstract class ViewJob<JobT extends ViewJob<JobT,RunT>, RunT extends Run<
                     }
                     reloadQueue = reloadThread.reloadQueue;
                 }
-                synchronized(reloadQueue) {
+                synchronized (reloadQueue) {
                     reloadQueue.add(this);
                     reloadQueue.notify();
                 }
@@ -149,7 +156,7 @@ public abstract class ViewJob<JobT extends ViewJob<JobT,RunT>, RunT extends Run<
             reload();
         } finally {
             reloadingInProgress = false;
-            nextUpdate = reloadPeriodically ? System.currentTimeMillis()+TimeUnit.MINUTES.toMillis(1) : Long.MAX_VALUE;
+            nextUpdate = reloadPeriodically ? System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(1) : Long.MAX_VALUE;
         }
     }
 
@@ -162,8 +169,30 @@ public abstract class ViewJob<JobT extends ViewJob<JobT,RunT>, RunT extends Run<
     protected abstract void reload();
 
     @Override
-    protected void submit( StaplerRequest req, StaplerResponse rsp ) throws IOException, ServletException, FormException {
-        super.submit(req,rsp);
+    protected void submit(StaplerRequest2 req, StaplerResponse2 rsp) throws IOException, ServletException, FormException {
+        if (Util.isOverridden(ViewJob.class, getClass(), "submit", StaplerRequest.class, StaplerResponse.class)) {
+            try {
+                submit(StaplerRequest.fromStaplerRequest2(req), StaplerResponse.fromStaplerResponse2(rsp));
+            } catch (javax.servlet.ServletException e) {
+                throw ServletExceptionWrapper.toJakartaServletException(e);
+            }
+        } else {
+            super.submit(req, rsp);
+            submitImpl();
+        }
+    }
+
+    /**
+     * @deprecated use {@link #submit(StaplerRequest2, StaplerResponse2)}
+     */
+    @Deprecated
+    @Override
+    protected void submit(StaplerRequest req, StaplerResponse rsp) throws IOException, javax.servlet.ServletException, FormException {
+        super.submit(req, rsp);
+        submitImpl();
+    }
+
+    private void submitImpl() {
         // make sure to reload to reflect this config change.
         nextUpdate = 0;
     }
@@ -187,12 +216,12 @@ public abstract class ViewJob<JobT extends ViewJob<JobT,RunT>, RunT extends Run<
         }
 
         private ViewJob getNext() throws InterruptedException {
-            synchronized(reloadQueue) {
+            synchronized (reloadQueue) {
                 // reload operations might eat InterruptException,
                 // so check the status every so often
-                while(reloadQueue.isEmpty() && !terminating())
+                while (reloadQueue.isEmpty() && !terminating())
                     reloadQueue.wait(TimeUnit.MINUTES.toMillis(1));
-                if(terminating())
+                if (terminating())
                     throw new InterruptedException();   // terminate now
                 ViewJob job = reloadQueue.iterator().next();
                 reloadQueue.remove(job);
@@ -207,14 +236,23 @@ public abstract class ViewJob<JobT extends ViewJob<JobT,RunT>, RunT extends Run<
         @Override
         public void run() {
             while (!terminating()) {
+                String jobName = null;
                 try {
-                    getNext()._reload();
+                    var next = getNext();
+                    jobName = next.getFullName();
+                    next._reload();
+                    jobName = null;
                 } catch (InterruptedException e) {
                     // treat this as a death signal
                     return;
-                } catch (Throwable t) {
+                } catch (Exception e) {
                     // otherwise ignore any error
-                    t.printStackTrace();
+                    if (jobName != null) {
+                        var finalJobName = jobName;
+                        LOGGER.log(Level.WARNING, e, () -> "Failed to reload job " + finalJobName);
+                    } else {
+                        LOGGER.log(Level.WARNING, e, () -> "Failed to obtain next job in the reload queue");
+                    }
                 }
             }
         }
@@ -229,7 +267,8 @@ public abstract class ViewJob<JobT extends ViewJob<JobT,RunT>, RunT extends Run<
      * <p>
      * We then switched to submission via HTTP, so this reloading is no longer necessary, so only do this
      * when explicitly requested.
-     * 
+     *
      */
-    public static boolean reloadPeriodically = SystemProperties.getBoolean(ViewJob.class.getName()+".reloadPeriodically");
+    @SuppressFBWarnings(value = "MS_SHOULD_BE_FINAL", justification = "for script console")
+    public static boolean reloadPeriodically = SystemProperties.getBoolean(ViewJob.class.getName() + ".reloadPeriodically");
 }

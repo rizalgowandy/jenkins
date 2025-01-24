@@ -1,18 +1,18 @@
 /*
  * The MIT License
- * 
+ *
  * Copyright (c) 2004-2009, Sun Microsystems, Inc., Kohsuke Kawaguchi, Tom Huybrechts
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model.listeners;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
@@ -34,6 +35,7 @@ import hudson.Launcher;
 import hudson.model.AbstractBuild;
 import hudson.model.BuildListener;
 import hudson.model.Environment;
+import hudson.model.Job;
 import hudson.model.JobProperty;
 import hudson.model.Run;
 import hudson.model.Run.RunnerAbortedException;
@@ -45,8 +47,11 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import jenkins.model.lazy.AbstractLazyLoadRunMap;
 import jenkins.util.Listeners;
 import org.jvnet.tiger_types.Types;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.Beta;
 
 /**
  * Receives notifications about builds.
@@ -57,7 +62,7 @@ import org.jvnet.tiger_types.Types;
  *
  * <p>
  * This is an abstract class so that methods added in the future won't break existing listeners.
- * 
+ *
  * @author Kohsuke Kawaguchi
  * @since 1.145
  */
@@ -71,9 +76,9 @@ public abstract class RunListener<R extends Run> implements ExtensionPoint {
     protected RunListener() {
         Type type = Types.getBaseClass(getClass(), RunListener.class);
         if (type instanceof ParameterizedType)
-            targetType = Types.erasure(Types.getTypeArgument(type,0));
+            targetType = Types.erasure(Types.getTypeArgument(type, 0));
         else
-            throw new IllegalStateException(getClass()+" uses the raw type for extending RunListener");
+            throw new IllegalStateException(getClass() + " uses the raw type for extending RunListener");
     }
 
     /**
@@ -156,8 +161,8 @@ public abstract class RunListener<R extends Run> implements ExtensionPoint {
      *      to suppress a stack trace by the receiver.
      * @since 1.410
      */
-    public Environment setUpEnvironment( AbstractBuild build, Launcher launcher, BuildListener listener ) throws IOException, InterruptedException, RunnerAbortedException {
-    	return new Environment() {};
+    public Environment setUpEnvironment(AbstractBuild build, Launcher launcher, BuildListener listener) throws IOException, InterruptedException, RunnerAbortedException {
+        return new Environment() {};
     }
 
     /**
@@ -169,6 +174,18 @@ public abstract class RunListener<R extends Run> implements ExtensionPoint {
      *      from breaking all the builds.
      */
     public void onDeleted(R r) {}
+
+    /**
+     * Allows listeners to veto build loading.
+     * @param job the job from which a build might be loaded
+     * @param buildNumber the proposed build number
+     * @return false to veto build loading
+     * @see AbstractLazyLoadRunMap#recognizeNumber
+     */
+    @Restricted(Beta.class)
+    public boolean allowLoad(@NonNull Job<?, ?> job, int buildNumber) {
+        return true;
+    }
 
     /**
      * Registers this object as an active listener so that it can start getting
@@ -201,7 +218,7 @@ public abstract class RunListener<R extends Run> implements ExtensionPoint {
      * Fires the {@link #onCompleted(Run, TaskListener)} event.
      */
     public static void fireCompleted(Run r, @NonNull TaskListener listener) {
-        Listeners.notify(RunListener.class, l -> {
+        Listeners.notify(RunListener.class, true, l -> {
             if (l.targetType.isInstance(r)) {
                 l.onCompleted(r, listener);
             }
@@ -212,7 +229,7 @@ public abstract class RunListener<R extends Run> implements ExtensionPoint {
      * Fires the {@link #onInitialize(Run)} event.
      */
     public static void fireInitialize(Run r) {
-        Listeners.notify(RunListener.class, l -> {
+        Listeners.notify(RunListener.class, true, l -> {
             if (l.targetType.isInstance(r)) {
                 l.onInitialize(r);
             }
@@ -224,7 +241,7 @@ public abstract class RunListener<R extends Run> implements ExtensionPoint {
      * Fires the {@link #onStarted(Run, TaskListener)} event.
      */
     public static void fireStarted(Run r, TaskListener listener) {
-        Listeners.notify(RunListener.class, l -> {
+        Listeners.notify(RunListener.class, true, l -> {
             if (l.targetType.isInstance(r)) {
                 l.onStarted(r, listener);
             }
@@ -238,7 +255,7 @@ public abstract class RunListener<R extends Run> implements ExtensionPoint {
         if (!Functions.isExtensionsAvailable()) {
             return;
         }
-        Listeners.notify(RunListener.class, l -> {
+        Listeners.notify(RunListener.class, true, l -> {
             if (l.targetType.isInstance(r)) {
                 l.onFinalized(r);
             }
@@ -249,7 +266,7 @@ public abstract class RunListener<R extends Run> implements ExtensionPoint {
      * Fires the {@link #onDeleted} event.
      */
     public static void fireDeleted(Run r) {
-        Listeners.notify(RunListener.class, l -> {
+        Listeners.notify(RunListener.class, true, l -> {
             if (l.targetType.isInstance(r)) {
                 l.onDeleted(r);
             }

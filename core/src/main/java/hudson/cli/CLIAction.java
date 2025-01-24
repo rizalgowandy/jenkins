@@ -21,10 +21,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.cli;
 
 import hudson.Extension;
 import hudson.model.UnprotectedRootAction;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -44,10 +47,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletResponse;
 import jenkins.model.Jenkins;
 import jenkins.util.FullDuplexHttpService;
+import jenkins.util.SystemProperties;
 import jenkins.websocket.WebSocketSession;
 import jenkins.websocket.WebSockets;
 import org.jenkinsci.Symbol;
@@ -57,8 +59,8 @@ import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.HttpResponses;
 import org.kohsuke.stapler.Stapler;
 import org.kohsuke.stapler.StaplerProxy;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 import org.springframework.security.core.Authentication;
 
 /**
@@ -71,6 +73,12 @@ import org.springframework.security.core.Authentication;
 public class CLIAction implements UnprotectedRootAction, StaplerProxy {
 
     private static final Logger LOGGER = Logger.getLogger(CLIAction.class.getName());
+
+    /**
+     * Boolean values map to allowing/disallowing WS CLI endpoint always, {@code null} is the default of doing an {@code Origin} check.
+     * {@code true} is only advisable if anonymous users have no permissions, and Jenkins sends SameSite=Lax cookies (or browsers use that as the implicit default).
+     */
+    /* package-private for testing */ static /* non-final for Script Console */ Boolean ALLOW_WEBSOCKET = SystemProperties.optBoolean(CLIAction.class.getName() + ".ALLOW_WEBSOCKET");
 
     private final transient Map<UUID, FullDuplexHttpService> duplexServices = new HashMap<>();
 
@@ -89,7 +97,7 @@ public class CLIAction implements UnprotectedRootAction, StaplerProxy {
         return "cli";
     }
 
-    public void doCommand(StaplerRequest req, StaplerResponse rsp) throws ServletException, IOException {
+    public void doCommand(StaplerRequest2 req, StaplerResponse2 rsp) throws ServletException, IOException {
         final Jenkins jenkins = Jenkins.get();
         jenkins.checkPermission(Jenkins.READ);
 
@@ -111,11 +119,46 @@ public class CLIAction implements UnprotectedRootAction, StaplerProxy {
     }
 
     /**
+     * Unlike {@link HttpResponses#errorWithoutStack} this sends the message in a header rather than the body.
+     * (Currently the WebSocket CLI is unable to process the body in an error message.)
+     */
+    private static HttpResponse statusWithExplanation(int code, String errorMessage) {
+        return new HttpResponse() {
+            @Override
+            public void generateResponse(StaplerRequest2 req, StaplerResponse2 rsp, Object node) {
+                rsp.setStatus(code);
+                rsp.setHeader("X-CLI-Error", errorMessage);
+            }
+        };
+    }
+
+    /**
      * WebSocket endpoint.
      */
-    public HttpResponse doWs() {
+    public HttpResponse doWs(StaplerRequest2 req) {
         if (!WebSockets.isSupported()) {
-            return HttpResponses.notFound();
+            return statusWithExplanation(HttpServletResponse.SC_NOT_FOUND, "WebSocket is not supported in this servlet container (try the built-in Jetty instead)");
+        }
+        if (ALLOW_WEBSOCKET == null) {
+            final String actualOrigin = req.getHeader("Origin");
+
+            String o = Jenkins.get().getRootUrlFromRequest();
+            String removeSuffix1 = "/";
+            if (o.endsWith(removeSuffix1)) {
+                o = o.substring(0, o.length() - removeSuffix1.length());
+            }
+            String removeSuffix2 = req.getContextPath();
+            if (o.endsWith(removeSuffix2)) {
+                o = o.substring(0, o.length() - removeSuffix2.length());
+            }
+            final String expectedOrigin = o;
+
+            if (actualOrigin == null || !actualOrigin.equals(expectedOrigin)) {
+                LOGGER.log(Level.FINE, () -> "Rejecting origin: " + actualOrigin + "; expected was from request: " + expectedOrigin);
+                return statusWithExplanation(HttpServletResponse.SC_FORBIDDEN, "Unexpected request origin (check your reverse proxy settings)");
+            }
+        } else if (!ALLOW_WEBSOCKET) {
+            return statusWithExplanation(HttpServletResponse.SC_FORBIDDEN, "WebSocket support for CLI disabled for this controller");
         }
         Authentication authentication = Jenkins.getAuthentication2();
         return WebSockets.upgrade(new WebSocketSession() {
@@ -128,14 +171,17 @@ public class CLIAction implements UnprotectedRootAction, StaplerProxy {
                     sentBytes += data.length;
                     sentCount++;
                 }
+
                 @Override
                 public void close() throws IOException {
                     doClose();
                 }
             }
-            private void doClose() {
+
+            private void doClose() throws IOException {
                 close();
             }
+
             @Override
             protected void opened() {
                 try {
@@ -156,6 +202,7 @@ public class CLIAction implements UnprotectedRootAction, StaplerProxy {
                     }
                 }, "CLI handler for " + authentication.getName()).start();
             }
+
             @Override
             protected void binary(byte[] payload, int offset, int len) {
                 try {
@@ -166,10 +213,12 @@ public class CLIAction implements UnprotectedRootAction, StaplerProxy {
                     error(x);
                 }
             }
+
             @Override
             protected void error(Throwable cause) {
                 LOGGER.log(Level.WARNING, null, cause);
             }
+
             @Override
             protected void closed(int statusCode, String reason) {
                 LOGGER.fine(() -> "closed: " + statusCode + ": " + reason);
@@ -181,8 +230,8 @@ public class CLIAction implements UnprotectedRootAction, StaplerProxy {
 
     @Override
     public Object getTarget() {
-        StaplerRequest req = Stapler.getCurrentRequest();
-        if (req.getRestOfPath().length()==0 && "POST".equals(req.getMethod())) {
+        StaplerRequest2 req = Stapler.getCurrentRequest2();
+        if (req.getRestOfPath().isEmpty() && "POST".equals(req.getMethod())) {
             // CLI connection request
             if ("false".equals(req.getParameter("remoting"))) {
                 throw new PlainCliEndpointResponse();
@@ -204,15 +253,18 @@ public class CLIAction implements UnprotectedRootAction, StaplerProxy {
         private final PipedInputStream stdin = new PipedInputStream();
         private final PipedOutputStream stdinMatch = new PipedOutputStream();
         private final Authentication authentication;
+
         ServerSideImpl(PlainCLIProtocol.Output out, Authentication authentication) throws IOException {
             super(out);
             stdinMatch.connect(stdin);
             this.authentication = authentication;
         }
+
         @Override
         protected void onArg(String text) {
             args.add(text);
         }
+
         @Override
         protected void onLocale(String text) {
             for (Locale _locale : Locale.getAvailableLocales()) {
@@ -223,6 +275,7 @@ public class CLIAction implements UnprotectedRootAction, StaplerProxy {
             }
             LOGGER.log(Level.WARNING, "unknown client locale {0}", text);
         }
+
         @Override
         protected void onEncoding(String text) {
             try {
@@ -231,18 +284,22 @@ public class CLIAction implements UnprotectedRootAction, StaplerProxy {
                 LOGGER.log(Level.WARNING, "unknown client charset {0}", text);
             }
         }
+
         @Override
         protected void onStart() {
             ready();
         }
+
         @Override
         protected void onStdin(byte[] chunk) throws IOException {
             stdinMatch.write(chunk);
         }
+
         @Override
         protected void onEndStdin() throws IOException {
             stdinMatch.close();
         }
+
         @Override
         protected void handleClose() {
             ready();
@@ -250,18 +307,20 @@ public class CLIAction implements UnprotectedRootAction, StaplerProxy {
                 runningThread.interrupt();
             }
         }
+
         private synchronized void ready() {
             ready = true;
             notifyAll();
         }
+
         void run() throws IOException, InterruptedException {
             synchronized (this) {
                 while (!ready) {
                     wait();
                 }
             }
-            PrintStream stdout = new PrintStream(streamStdout(), false, encoding.name());
-            PrintStream stderr = new PrintStream(streamStderr(), true, encoding.name());
+            PrintStream stdout = new PrintStream(streamStdout(), false, encoding);
+            PrintStream stderr = new PrintStream(streamStderr(), true, encoding);
             if (args.isEmpty()) {
                 stderr.println("Connection closed before arguments received");
                 sendExit(2);
@@ -304,7 +363,7 @@ public class CLIAction implements UnprotectedRootAction, StaplerProxy {
         }
 
         @Override
-        protected FullDuplexHttpService createService(StaplerRequest req, UUID uuid) throws IOException {
+        protected FullDuplexHttpService createService(StaplerRequest2 req, UUID uuid) throws IOException {
             return new FullDuplexHttpService(uuid) {
                 @Override
                 protected void run(InputStream upload, OutputStream download) throws IOException, InterruptedException {

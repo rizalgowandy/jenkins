@@ -21,18 +21,19 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package lib.form;
 
 import static org.junit.Assert.assertEquals;
 
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import net.sf.json.JSONObject;
+import org.htmlunit.html.HtmlPage;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.HttpResponses;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 
 /**
  * Tests the handling of @nameRef in the form tree.
@@ -49,10 +50,11 @@ public class NameRefTest {
 
     public static class JenkinsRuleWithJelly extends JenkinsRule {
 
-        public HttpResponse doSubmitTest1(StaplerRequest req) throws Exception {
+        public HttpResponse doSubmitTest1(StaplerRequest2 req) throws Exception {
             JSONObject f = req.getSubmittedForm();
+            f.remove("Submit");
             System.out.println(f);
-            assertEquals("{\"foo\":{\"bar\":{\"zot\":\"zot\"}}}",f.toString());
+            assertEquals("{\"foo\":{\"bar\":{\"zot\":\"zot\"}}}", f.toString());
             return HttpResponses.ok();
         }
 

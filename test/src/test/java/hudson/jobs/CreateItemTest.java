@@ -21,29 +21,38 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.jobs;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
-import com.gargoylesoftware.htmlunit.HttpMethod;
-import com.gargoylesoftware.htmlunit.Page;
-import com.gargoylesoftware.htmlunit.WebRequest;
 import hudson.model.Failure;
 import hudson.model.FreeStyleProject;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
+import hudson.model.ListView;
+import hudson.model.User;
 import hudson.model.listeners.ItemListener;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.text.MessageFormat;
+import jenkins.model.Jenkins;
+import org.htmlunit.HttpMethod;
+import org.htmlunit.Page;
+import org.htmlunit.WebRequest;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
 import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.MockAuthorizationStrategy;
 import org.jvnet.hudson.test.MockFolder;
 import org.jvnet.hudson.test.TestExtension;
 
@@ -70,9 +79,9 @@ public class CreateItemTest {
         rule.createFreeStyleProject(sourceJobName);
 
         String newJobName = "newJob";
-        URL apiURL = new URL(MessageFormat.format(
+        URL apiURL = new URI(MessageFormat.format(
                     "{0}createItem?mode=copy&from={1}&name={2}",
-                    rule.getURL().toString(), sourceJobName, newJobName));
+                    rule.getURL().toString(), sourceJobName, newJobName)).toURL();
 
         WebRequest request = new WebRequest(apiURL, HttpMethod.POST);
         deleteContentTypeHeader(request);
@@ -94,9 +103,9 @@ public class CreateItemTest {
         rule.createFreeStyleProject(sourceJobName);
 
         String newJobName = "newJob";
-        URL apiURL = new URL(MessageFormat.format(
+        URL apiURL = new URI(MessageFormat.format(
                     "{0}createItem?mode=copy&from={1}&name={2}",
-                    rule.getURL().toString(), sourceJobName, newJobName));
+                    rule.getURL().toString(), sourceJobName, newJobName)).toURL();
 
         WebRequest request = new WebRequest(apiURL, HttpMethod.POST);
         deleteContentTypeHeader(request);
@@ -105,8 +114,8 @@ public class CreateItemTest {
                 .withThrowExceptionOnFailingStatusCode(false)
                 .getPage(request);
 
-        assertEquals("Creating job from copy should fail.", 
-                HttpURLConnection.HTTP_BAD_REQUEST, 
+        assertEquals("Creating job from copy should fail.",
+                HttpURLConnection.HTTP_BAD_REQUEST,
                 p.getWebResponse().getStatusCode());
         assertThat(rule.jenkins.getItem("newJob"), nullValue());
     }
@@ -123,10 +132,10 @@ public class CreateItemTest {
 
         JenkinsRule.WebClient wc = rule.createWebClient();
 
-        wc.getPage(new WebRequest(new URL(d2.getAbsoluteUrl() + "createItem?mode=copy&name=p2&from=../d1/p"), HttpMethod.POST));
+        wc.getPage(new WebRequest(new URI(d2.getAbsoluteUrl() + "createItem?mode=copy&name=p2&from=../d1/p").toURL(), HttpMethod.POST));
         assertNotNull(d2.getItem("p2"));
 
-        wc.getPage(new WebRequest(new URL(d2.getAbsoluteUrl() + "createItem?mode=copy&name=p3&from=/d1/p"), HttpMethod.POST));
+        wc.getPage(new WebRequest(new URI(d2.getAbsoluteUrl() + "createItem?mode=copy&name=p3&from=/d1/p").toURL(), HttpMethod.POST));
         assertNotNull(d2.getItem("p3"));
     }
 
@@ -140,4 +149,50 @@ public class CreateItemTest {
         }
     }
 
+    @Issue("JENKINS-74795")
+    @Test
+    public void testCreateItemDoesNotPopulateDefaultView() throws Exception {
+        // Create a view that only displays jobs that start with 'a-'
+        FreeStyleProject aJob = rule.createFreeStyleProject("a-freestyle-job");
+        ListView aView = new ListView("a-view");
+        aView.setIncludeRegex("a-.*");
+        rule.jenkins.addView(aView);
+        assertThat(aView.getItems(), containsInAnyOrder(aJob));
+        assertFalse(aView.isDefault()); // Not yet the default view
+
+        // Create a view that only displays jobs that start with 'b-'
+        FreeStyleProject bJob = rule.createFreeStyleProject("b-freestyle-job");
+        ListView bView = new ListView("b-view");
+        bView.setIncludeRegex("b-.*");
+        rule.jenkins.addView(bView);
+        assertThat(bView.getItems(), containsInAnyOrder(bJob));
+        assertFalse(bView.isDefault()); // Not the default view
+
+        // Make the a-view the default
+        rule.jenkins.setPrimaryView(aView);
+        assertTrue(aView.isDefault()); // Now a-view is the default view
+
+        // Use createItem API to create a new job
+        User user = User.getById("user", true);
+        rule.jenkins.setSecurityRealm(rule.createDummySecurityRealm());
+        rule.jenkins.setAuthorizationStrategy(new MockAuthorizationStrategy()
+                .grant(Jenkins.READ, Item.CREATE)
+                .everywhere()
+                .to(user.getId()));
+        String b2JobName = "b-freestyle-job-2";
+        try (JenkinsRule.WebClient wc = rule.createWebClient()) {
+            wc.login(user.getId());
+            WebRequest request = new WebRequest(wc.createCrumbedUrl("createItem?name=" + b2JobName), HttpMethod.POST);
+            request.setAdditionalHeader("Content-Type", "application/xml");
+            request.setRequestBody("<project/>");
+            wc.getPage(request);
+        }
+        FreeStyleProject b2Job = rule.jenkins.getItemByFullName(b2JobName, FreeStyleProject.class);
+        assertThat(bView.getItems(), containsInAnyOrder(bJob, b2Job));
+        assertFalse(bView.isDefault());
+
+        // Confirm new job is not visible in default view
+        assertTrue(aView.isDefault()); // a-view is still the default view
+        assertThat(aView.getItems(), containsInAnyOrder(aJob));
+    }
 }

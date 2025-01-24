@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.diagnosis;
 
 import hudson.Extension;
@@ -40,7 +41,7 @@ import org.kohsuke.stapler.HttpRedirect;
 import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.HttpResponses;
 import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 import org.kohsuke.stapler.interceptor.RequirePOST;
 
 /**
@@ -67,7 +68,7 @@ public class ReverseProxySetupMonitor extends AdministrativeMonitor {
 
     @Restricted(DoNotUse.class) // WebOnly
     @RestrictedSince("2.235")
-    public HttpResponse doTest(StaplerRequest request, @QueryParameter boolean testWithContext) {
+    public HttpResponse doTest(StaplerRequest2 request, @QueryParameter boolean testWithContext) {
         String referer = request.getReferer();
         Jenkins j = Jenkins.get();
         String redirect;
@@ -115,7 +116,7 @@ public class ReverseProxySetupMonitor extends AdministrativeMonitor {
     @RestrictedSince("2.235")
     @RequirePOST
     public HttpResponse doAct(@QueryParameter String no) throws IOException {
-        if(no!=null) { // dismiss
+        if (no != null) { // dismiss
             Jenkins.get().checkPermission(Jenkins.ADMINISTER);
             disable(true);
             // of course the irony is that this redirect won't work

@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package org.jenkins.ui.icon;
 
 import java.util.ArrayList;
@@ -30,7 +31,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.commons.jelly.JellyContext;
-import org.apache.commons.lang.StringUtils;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 
@@ -67,7 +67,7 @@ public class Icon {
     /**
      * Creates a {@link IconType#CORE core} icon.
      *
-     * @param classSpec The icon class names.
+     * @param classSpec The icon class names. Expected to start with `icon-`.
      * @param style     The icon style.
      */
     public Icon(String classSpec, String style) {
@@ -77,7 +77,7 @@ public class Icon {
     /**
      * Creates a {@link IconType#CORE core} icon.
      *
-     * @param classSpec The icon class names.
+     * @param classSpec The icon class names. Expected to start with `icon-`.
      * @param url       The icon image url.
      * @param style     The icon style.
      */
@@ -95,7 +95,7 @@ public class Icon {
     /**
      * Icon instance.
      *
-     * @param classSpec The icon class specification.
+     * @param classSpec The icon class specification. Expected to start with `icon-`.
      * @param url       The icon image url.
      * @param style     The icon style.
      * @param iconType  The icon type.
@@ -107,7 +107,7 @@ public class Icon {
     /**
      * Creates an icon.
      *
-     * @param classSpec The icon class names.
+     * @param classSpec The icon class names. Expected to start with `icon-`.
      * @param url       The icon image url.
      * @param style     The icon style.
      * @param iconFormat the {@link IconFormat}.
@@ -179,7 +179,23 @@ public class Icon {
      */
     public String getQualifiedUrl(JellyContext context) {
         if (url != null) {
-            return iconType.toQualifiedUrl(url, context);
+            return iconType.toQualifiedUrl(url, context.getVariable("resURL").toString());
+        } else {
+            return "";
+        }
+    }
+
+    /**
+     * Get the qualified icon url.
+     * <br>
+     * Qualifying the URL involves prefixing it depending on whether the icon is a core or plugin icon.
+     *
+     * @param resUrl The url of resources.
+     * @return The qualified icon url.
+     */
+    public String getQualifiedUrl(String resUrl) {
+        if (url != null) {
+            return iconType.toQualifiedUrl(url, resUrl);
         } else {
             return "";
         }
@@ -204,7 +220,11 @@ public class Icon {
         if (string == null) {
             return null;
         }
-        return "icon-" + toNormalizedIconName(string);
+        String iconName = toNormalizedIconName(string);
+        if (iconName.startsWith("icon-")) {
+            return iconName;
+        }
+        return "icon-" + iconName;
     }
 
     /**
@@ -217,7 +237,7 @@ public class Icon {
         if (string == null) {
             return null;
         }
-        if (StringUtils.endsWithAny(string, SUPPORTED_FORMATS)) {
+        if (Arrays.stream(SUPPORTED_FORMATS).anyMatch(string::endsWith)) {
             string = string.substring(0, string.length() - 4);
         }
         return string.replace('_', '-');
@@ -259,7 +279,7 @@ public class Icon {
         // Trim all tokens first
         for (String classNameTok : classNameTokA) {
             String trimmedToken = classNameTok.trim();
-            if (trimmedToken.length() > 0) {
+            if (!trimmedToken.isEmpty()) {
                 classNameTokL.add(trimmedToken);
             }
         }

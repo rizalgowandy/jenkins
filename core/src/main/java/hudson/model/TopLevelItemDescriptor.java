@@ -1,18 +1,18 @@
 /*
  * The MIT License
- * 
+ *
  * Copyright (c) 2004-2009, Sun Microsystems, Inc., Kohsuke Kawaguchi
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,11 +21,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model;
 
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.ExtensionList;
+import hudson.util.FormValidation;
 import java.io.StringWriter;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -33,11 +35,14 @@ import jenkins.model.Jenkins;
 import jenkins.model.item_category.ItemCategory;
 import org.apache.commons.jelly.Script;
 import org.apache.commons.jelly.XMLOutput;
-import org.apache.commons.lang.StringUtils;
 import org.jenkins.ui.icon.Icon;
 import org.jenkins.ui.icon.IconSet;
 import org.jenkins.ui.icon.IconSpec;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
+import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.MetaClass;
+import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.Stapler;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.WebApp;
@@ -128,6 +133,7 @@ public abstract class TopLevelItemDescriptor extends Descriptor<TopLevelItem> im
      * script, which will be used to render the text below the caption
      * that explains the item type.
      */
+    @NonNull
     @Override
     public String getDisplayName() {
         return super.getDisplayName();
@@ -158,7 +164,7 @@ public abstract class TopLevelItemDescriptor extends Descriptor<TopLevelItem> im
                 DefaultScriptInvoker dsi = new DefaultScriptInvoker();
                 StringWriter sw = new StringWriter();
                 XMLOutput xml = dsi.createXMLOutput(sw, true);
-                dsi.invokeScript(Stapler.getCurrentRequest(), Stapler.getCurrentResponse(), s, this, xml);
+                dsi.invokeScript(Stapler.getCurrentRequest2(), Stapler.getCurrentResponse2(), s, this, xml);
                 return sw.toString();
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, null, e);
@@ -213,8 +219,9 @@ public abstract class TopLevelItemDescriptor extends Descriptor<TopLevelItem> im
     @CheckForNull
     @Deprecated
     public String getIconFilePath(String size) {
-        if (!StringUtils.isBlank(getIconFilePathPattern())) {
-            return getIconFilePathPattern().replace(":size", size);
+        String iconFilePathPattern = getIconFilePathPattern();
+        if (iconFilePathPattern != null && !iconFilePathPattern.isBlank()) {
+            return iconFilePathPattern.replace(":size", size);
         }
         return null;
     }
@@ -237,7 +244,7 @@ public abstract class TopLevelItemDescriptor extends Descriptor<TopLevelItem> im
                 // this one is easy... too easy... also will never happen
                 return IconSet.toNormalizedIconNameClass(path);
             }
-            if (Jenkins.RESOURCE_PATH.length() > 0 && path.startsWith(Jenkins.RESOURCE_PATH)) {
+            if (!Jenkins.RESOURCE_PATH.isEmpty() && path.startsWith(Jenkins.RESOURCE_PATH)) {
                 // will to live falling
                 path = path.substring(Jenkins.RESOURCE_PATH.length());
             }
@@ -284,4 +291,8 @@ public abstract class TopLevelItemDescriptor extends Descriptor<TopLevelItem> im
         return Items.all();
     }
 
+    @Restricted(NoExternalUse.class)
+    public FormValidation doCheckDisplayNameOrNull(@AncestorInPath TopLevelItem item, @QueryParameter String value) {
+        return Jenkins.get().checkDisplayName(value, item);
+    }
 }

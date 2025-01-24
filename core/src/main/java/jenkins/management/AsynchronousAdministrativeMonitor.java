@@ -3,6 +3,7 @@ package jenkins.management;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.AbortException;
 import hudson.Functions;
+import hudson.Util;
 import hudson.console.AnnotatedLargeText;
 import hudson.model.AdministrativeMonitor;
 import hudson.model.TaskListener;
@@ -11,11 +12,11 @@ import hudson.security.ACLContext;
 import hudson.util.StreamTaskListener;
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.Charset;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import jenkins.model.Jenkins;
-import jenkins.security.RekeySecretAdminMonitor;
 
 /**
  * Convenient partial implementation of {@link AdministrativeMonitor} that involves a background "fixing" action
@@ -24,9 +25,6 @@ import jenkins.security.RekeySecretAdminMonitor;
  * <p>
  * A subclass defines what that background fixing actually does in {@link #fix(TaskListener)}. The logging output
  * from it gets persisted, and this class provides a "/log" view that allows the administrator to monitor its progress.
- *
- * <p>
- * See {@link RekeySecretAdminMonitor} for an example of how to subtype this class.
  *
  * @author Kohsuke Kawaguchi
  */
@@ -40,7 +38,7 @@ public abstract class AsynchronousAdministrativeMonitor extends AdministrativeMo
      * Is there an active execution process going on?
      */
     public boolean isFixingActive() {
-        return fixThread !=null && fixThread.isAlive();
+        return fixThread != null && fixThread.isAlive();
     }
 
     /**
@@ -57,12 +55,16 @@ public abstract class AsynchronousAdministrativeMonitor extends AdministrativeMo
      */
     protected File getLogFile() {
         File base = getBaseDir();
-        base.mkdirs();
-        return new File(base,"log");
+        try {
+            Util.createDirectories(base.toPath());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return new File(base, "log");
     }
 
     protected File getBaseDir() {
-        return new File(Jenkins.get().getRootDir(),getClass().getName());
+        return new File(Jenkins.get().getRootDir(), getClass().getName());
     }
 
     @Override

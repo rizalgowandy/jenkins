@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model.queue;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
@@ -73,8 +74,8 @@ public final class FutureImpl extends AsyncFutureImpl<Executable> implements Que
     public boolean cancel(boolean mayInterruptIfRunning) {
         Queue q = Jenkins.get().getQueue();
         synchronized (this) {
-            if(!executors.isEmpty()) {
-                if(mayInterruptIfRunning)
+            if (!executors.isEmpty()) {
+                if (mayInterruptIfRunning)
                     for (Executor e : executors)
                         e.interrupt();
                 return mayInterruptIfRunning;
@@ -93,5 +94,9 @@ public final class FutureImpl extends AsyncFutureImpl<Executable> implements Que
 
     synchronized void addExecutor(@NonNull Executor executor) {
         this.executors.add(executor);
+    }
+
+    synchronized void finished() {
+        executors.clear();
     }
 }

@@ -21,11 +21,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.util;
 
 import com.google.common.annotations.VisibleForTesting;
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 import edu.umd.cs.findbugs.annotations.NonNull;
+import hudson.Util;
+import jakarta.servlet.ServletOutputStream;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.HeadlessException;
@@ -33,7 +36,7 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.Calendar;
 import javax.imageio.ImageIO;
-import javax.servlet.ServletOutputStream;
+import jenkins.security.stapler.StaplerNotDispatchable;
 import jenkins.util.SystemProperties;
 import org.jfree.chart.ChartRenderingInfo;
 import org.jfree.chart.ChartUtilities;
@@ -42,7 +45,9 @@ import org.jfree.chart.plot.Plot;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerResponse2;
 
 /**
  * A JFreeChart-generated graph that's bound to UI.
@@ -56,7 +61,7 @@ import org.kohsuke.stapler.StaplerResponse;
  * <dt>/map
  * <dd>Clickable map
  * </dl>
- * 
+ *
  * @author Kohsuke Kawaguchi
  * @since 1.320
  */
@@ -90,7 +95,7 @@ public abstract class Graph {
      */
     protected abstract JFreeChart createGraph();
 
-    private BufferedImage render(StaplerRequest req, ChartRenderingInfo info) {
+    private BufferedImage render(StaplerRequest2 req, ChartRenderingInfo info) {
         String w = req.getParameter("width");
         if (w == null) {
             w = String.valueOf(defaultWidth);
@@ -109,7 +114,7 @@ public abstract class Graph {
         Color graphBg = stringToColor(req.getParameter("graphBg"));
         Color plotBg = stringToColor(req.getParameter("plotBg"));
 
-        if (graph==null)    graph = createGraph();
+        if (graph == null)    graph = createGraph();
         graph.setBackgroundPaint(graphBg);
         Plot p = graph.getPlot();
         p.setBackgroundPaint(plotBg);
@@ -125,7 +130,7 @@ public abstract class Graph {
     @Restricted(NoExternalUse.class)
     @VisibleForTesting
     public static Dimension safeDimension(int width, int height, int defaultWidth, int defaultHeight) {
-        if (width <= 0 || height <= 0 || width > MAX_AREA/height) {
+        if (width <= 0 || height <= 0 || width > MAX_AREA / height) {
             width = defaultWidth;
             height = defaultHeight;
         }
@@ -146,17 +151,36 @@ public abstract class Graph {
 
     /**
      * Renders a graph.
+     *
+     * @since 2.475
      */
+    public void doPng(StaplerRequest2 req, StaplerResponse2 rsp) throws IOException {
+        if (Util.isOverridden(Graph.class, getClass(), "doPng", StaplerRequest.class, StaplerResponse.class)) {
+            doPng(StaplerRequest.fromStaplerRequest2(req), StaplerResponse.fromStaplerResponse2(rsp));
+        } else {
+            doPngImpl(req, rsp);
+        }
+    }
+
+    /**
+     * @deprecated use {@link #doPng(StaplerRequest2, StaplerResponse2)}
+     */
+    @Deprecated
+    @StaplerNotDispatchable
     public void doPng(StaplerRequest req, StaplerResponse rsp) throws IOException {
+        doPngImpl(StaplerRequest.toStaplerRequest2(req), StaplerResponse.toStaplerResponse2(rsp));
+    }
+
+    private void doPngImpl(StaplerRequest2 req, StaplerResponse2 rsp) throws IOException {
         if (req.checkIfModified(timestamp, rsp)) return;
 
         try {
-            BufferedImage image = render(req,null);
+            BufferedImage image = render(req, null);
             rsp.setContentType("image/png");
             ServletOutputStream os = rsp.getOutputStream();
             ImageIO.write(image, "PNG", os);
             os.close();
-        } catch(Error e) {
+        } catch (Error e) {
             /* OpenJDK on ARM produces an error like this in case of headless error
                 Caused by: java.lang.Error: Probable fatal error:No fonts found.
                         at sun.font.FontManager.getDefaultPhysicalFont(FontManager.java:1088)
@@ -187,27 +211,46 @@ public abstract class Graph {
                         at hudson.tasks.test.TestResultProjectAction.doTrend(TestResultProjectAction.java:97)
                         ... 37 more
              */
-            if(e.getMessage().contains("Probable fatal error:No fonts found")) {
-                rsp.sendRedirect2(req.getContextPath()+"/images/headless.png");
+            if (e.getMessage().contains("Probable fatal error:No fonts found")) {
+                rsp.sendRedirect2(req.getContextPath() + "/images/headless.png");
                 return;
             }
             throw e; // otherwise let the caller deal with it
-        } catch(HeadlessException e) {
+        } catch (HeadlessException e) {
             // not available. send out error message
-            rsp.sendRedirect2(req.getContextPath()+"/images/headless.png");
+            rsp.sendRedirect2(req.getContextPath() + "/images/headless.png");
         }
     }
 
     /**
      * Renders a clickable map.
+     *
+     * @since 2.475
      */
+    public void doMap(StaplerRequest2 req, StaplerResponse2 rsp) throws IOException {
+        if (Util.isOverridden(Graph.class, getClass(), "doMap", StaplerRequest.class, StaplerResponse.class)) {
+            doMap(StaplerRequest.fromStaplerRequest2(req), StaplerResponse.fromStaplerResponse2(rsp));
+        } else {
+            doMapImpl(req, rsp);
+        }
+    }
+
+    /**
+     * @deprecated use {@link #doMap(StaplerRequest2, StaplerResponse2)}
+     */
+    @Deprecated
+    @StaplerNotDispatchable
     public void doMap(StaplerRequest req, StaplerResponse rsp) throws IOException {
+        doMapImpl(StaplerRequest.toStaplerRequest2(req), StaplerResponse.toStaplerResponse2(rsp));
+    }
+
+    private void doMapImpl(StaplerRequest2 req, StaplerResponse2 rsp) throws IOException {
         if (req.checkIfModified(timestamp, rsp)) return;
 
         ChartRenderingInfo info = new ChartRenderingInfo();
-        render(req,info);
+        render(req, info);
 
         rsp.setContentType("text/plain;charset=UTF-8");
-        rsp.getWriter().println(ChartUtilities.getImageMap( "map", info ));
+        rsp.getWriter().println(ChartUtilities.getImageMap("map", info));
     }
 }

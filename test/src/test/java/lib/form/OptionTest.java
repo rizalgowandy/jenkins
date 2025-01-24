@@ -21,18 +21,20 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package lib.form;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-import com.gargoylesoftware.htmlunit.html.DomElement;
-import com.gargoylesoftware.htmlunit.html.DomNodeList;
-import com.gargoylesoftware.htmlunit.html.HtmlElement;
-import com.gargoylesoftware.htmlunit.html.HtmlOption;
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
+import hudson.ExtensionList;
 import hudson.model.RootAction;
+import org.htmlunit.html.DomElement;
+import org.htmlunit.html.DomNodeList;
+import org.htmlunit.html.HtmlElement;
+import org.htmlunit.html.HtmlOption;
+import org.htmlunit.html.HtmlPage;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
@@ -120,14 +122,14 @@ public class OptionTest {
         }
     }
 
-    private String escapeForBody(String str){
+    private String escapeForBody(String str) {
         return str
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
                 ;
     }
 
-    private String escapeForBody_alternate(String str){
+    private String escapeForBody_alternate(String str) {
         return str
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
@@ -137,7 +139,7 @@ public class OptionTest {
 
 
 
-    private String escapeForValue(String str){
+    private String escapeForValue(String str) {
         return str
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
@@ -146,7 +148,7 @@ public class OptionTest {
                 ;
     }
 
-    private String escapeForBody_uglyButSafe(String str){
+    private String escapeForBody_uglyButSafe(String str) {
         return str
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
@@ -157,7 +159,7 @@ public class OptionTest {
                 ;
     }
 
-    private String escapeForValue_uglyButSafe(String str){
+    private String escapeForValue_uglyButSafe(String str) {
         return str
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
@@ -215,15 +217,15 @@ public class OptionTest {
                             String bodyContainsExpected, String valueContainsExpected,
                             boolean checkExactCharacters,
                             boolean withValueTrue, boolean withValueFalse) throws Exception {
-        UsingJellyView view = j.jenkins.getExtensionList(UsingJellyView.class).get(0);
+        UsingJellyView view = ExtensionList.lookupFirst(UsingJellyView.class);
         view.setMode(mode);
         view.setInjection(msgToInject);
 
-        if(withValueTrue){
+        if (withValueTrue) {
             view.setWithValue(true);
             callPageAndCheckIfResultContainsExpected("usingJelly", bodyContainsExpected, valueContainsExpected, checkExactCharacters);
         }
-        if(withValueFalse){
+        if (withValueFalse) {
             view.setWithValue(false);
             callPageAndCheckIfResultContainsExpected("usingJelly", bodyContainsExpected, valueContainsExpected, checkExactCharacters);
         }
@@ -241,15 +243,15 @@ public class OptionTest {
                              String bodyContainsExpected, String valueContainsExpected,
                              boolean checkExactCharacters,
                              boolean withValueTrue, boolean withValueFalse) throws Exception {
-        UsingGroovyView view = j.jenkins.getExtensionList(UsingGroovyView.class).get(0);
+        UsingGroovyView view = ExtensionList.lookupFirst(UsingGroovyView.class);
         view.setMode(mode);
         view.setInjection(msgToInject);
 
-        if(withValueTrue){
+        if (withValueTrue) {
             view.setWithValue(true);
             callPageAndCheckIfResultContainsExpected("usingGroovy", bodyContainsExpected, valueContainsExpected, checkExactCharacters);
         }
-        if(withValueFalse){
+        if (withValueFalse) {
             view.setWithValue(false);
             callPageAndCheckIfResultContainsExpected("usingGroovy", bodyContainsExpected, valueContainsExpected, checkExactCharacters);
         }
@@ -259,7 +261,7 @@ public class OptionTest {
         HtmlPage page = (HtmlPage) j.createWebClient().goTo(url, null);
         String responseContent = page.getWebResponse().getContentAsString();
 
-        if(checkExactCharacters){
+        if (checkExactCharacters) {
             // in this mode, we check the data directly received by the response,
             // without any un-escaping done by HtmlElement
 
@@ -275,9 +277,9 @@ public class OptionTest {
             // also check there is no "<script>" present in the answer
             int indexOfScript = responseContent.indexOf("<script>");
             assertEquals(-1, indexOfScript);
-        }else{
+        } else {
             // in this mode, we check the content as displayed to the user, converting all the escaped characters to
-            // their un-escaped equivalent, done by com.gargoylesoftware.htmlunit.html.HtmlSerializer#cleanUp(String)
+            // their un-escaped equivalent, done by org.htmlunit.html.HtmlSerializer#cleanUp(String)
 
             HtmlElement document = page.getDocumentElement();
             DomNodeList<HtmlElement> elements = document.getElementsByTagName("option");
@@ -285,7 +287,7 @@ public class OptionTest {
 
             HtmlOption option = (HtmlOption) elements.get(0);
 
-            // without that check, the getValueAttribute could return getText if the value is not present
+            // without that check, the getValue could return getText if the value is not present
             assertNotEquals(DomElement.ATTRIBUTE_NOT_DEFINED, option.getAttribute("value"));
 
             assertTrue(

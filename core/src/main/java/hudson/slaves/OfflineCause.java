@@ -26,14 +26,15 @@ package hudson.slaves;
 
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 import edu.umd.cs.findbugs.annotations.NonNull;
-import hudson.Functions;
 import hudson.model.Computer;
 import hudson.model.User;
 import java.io.ObjectStreamException;
 import java.util.Collections;
-import java.util.Date;
+import jenkins.agents.IOfflineCause;
 import jenkins.model.Jenkins;
 import org.jvnet.localizer.Localizable;
+import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
 
@@ -50,26 +51,31 @@ import org.kohsuke.stapler.export.ExportedBean;
  * @since 1.320
  */
 @ExportedBean
-public abstract class OfflineCause {
+public abstract class OfflineCause implements IOfflineCause {
     protected final long timestamp = System.currentTimeMillis();
 
     /**
-     * Timestamp in which the event happened.
+     * {@inheritDoc}
      *
      * @since 1.612
      */
     @Exported
+    @Override
     public long getTimestamp() {
         return timestamp;
     }
 
     /**
-     * Same as {@link #getTimestamp()} but in a different type.
-     *
-     * @since 1.612
+     * @deprecated Only exists for backward compatibility.
+     * @see Computer#setTemporarilyOffline(boolean)
      */
-    public final @NonNull Date getTime() {
-        return new Date(timestamp);
+    @Deprecated
+    @Restricted(NoExternalUse.class)
+    public static class LegacyOfflineCause extends OfflineCause {
+        @Exported(name = "description") @Override
+        public String toString() {
+            return "";
+        }
     }
 
     /**
@@ -86,14 +92,14 @@ public abstract class OfflineCause {
             this.description = description;
         }
 
-        @Exported(name="description") @Override
+        @Exported(name = "description") @Override
         public String toString() {
             return description.toString();
         }
     }
 
     public static OfflineCause create(Localizable d) {
-        if (d==null)    return null;
+        if (d == null)    return null;
         return new SimpleOfflineCause(d);
     }
 
@@ -112,7 +118,7 @@ public abstract class OfflineCause {
         }
 
         @Override public String toString() {
-            return Messages.OfflineCause_connection_was_broken_(Functions.printThrowable(cause));
+            return Messages.OfflineCause_connection_was_broken_simple();
         }
     }
 
@@ -137,15 +143,15 @@ public abstract class OfflineCause {
         // null when unknown
         private /*final*/ @CheckForNull String userId;
 
+        private final String message;
+
         public UserCause(@CheckForNull User user, @CheckForNull String message) {
-            this(
-                    user != null ? user.getId() : null,
-                    message != null ? " : " + message : ""
-            );
+            this(user != null ? user.getId() : null, message);
         }
 
         private UserCause(String userId, String message) {
-            super(hudson.slaves.Messages._SlaveComputer_DisconnectedBy(userId != null ? userId : Jenkins.ANONYMOUS2.getName(), message));
+            super(hudson.slaves.Messages._SlaveComputer_DisconnectedBy(userId != null ? userId : Jenkins.ANONYMOUS2.getName(), message != null ? " : " + message : ""));
+            this.message = message;
             this.userId = userId;
         }
 
@@ -154,6 +160,13 @@ public abstract class OfflineCause {
                     ? User.getUnknown()
                     : User.getById(userId, true)
             ;
+        }
+
+        /**
+         * @return the message that was provided when the computer was taken offline
+         */
+        public String getMessage() {
+            return message;
         }
 
         // Storing the User in a filed was a mistake, switch to userId
@@ -170,6 +183,24 @@ public abstract class OfflineCause {
                 this.user = null;
             }
             return this;
+        }
+
+        @Override
+        @NonNull
+        public String getComputerIcon() {
+            return "symbol-computer-disconnected";
+        }
+
+        @Override
+        @NonNull
+        public String getComputerIconAltText() {
+            return "[temporarily offline by user]";
+        }
+
+        @NonNull
+        @Override
+        public String getIcon() {
+            return "symbol-person";
         }
     }
 
@@ -188,8 +219,31 @@ public abstract class OfflineCause {
      * @since 1.644
      */
     public static class IdleOfflineCause extends SimpleOfflineCause {
-        public IdleOfflineCause () {
+        public IdleOfflineCause() {
             super(hudson.slaves.Messages._RetentionStrategy_Demand_OfflineIdle());
+        }
+
+        @Override
+        @NonNull
+        public String getComputerIcon() {
+            return "symbol-computer-paused";
+        }
+
+        @Override
+        @NonNull
+        public String getComputerIconAltText() {
+            return "[will connect automatically whenever needed]";
+        }
+
+        @Override
+        @NonNull
+        public String getIcon() {
+            return "symbol-pause";
+        }
+
+        @Override
+        public String getStatusClass() {
+            return "info";
         }
     }
 }

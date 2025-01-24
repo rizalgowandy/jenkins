@@ -21,13 +21,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.cli.handlers;
 
+import hudson.cli.declarative.OptionHandlerExtension;
 import hudson.model.Job;
-import org.kohsuke.MetaInfServices;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.OptionDef;
-import org.kohsuke.args4j.spi.OptionHandler;
 import org.kohsuke.args4j.spi.Setter;
 
 /**
@@ -35,7 +35,7 @@ import org.kohsuke.args4j.spi.Setter;
  *
  * @author Kohsuke Kawaguchi
  */
-@MetaInfServices(OptionHandler.class)
+@OptionHandlerExtension
 @SuppressWarnings("rawtypes")
 public class JobOptionHandler extends GenericItemOptionHandler<Job> {
     public JobOptionHandler(CmdLineParser parser, OptionDef option, Setter<Job> setter) {

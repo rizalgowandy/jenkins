@@ -1,18 +1,18 @@
 /*
  * The MIT License
- * 
+ *
  * Copyright (c) 2004-2010, Sun Microsystems, Inc., Kohsuke Kawaguchi
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.util;
 
 import static java.util.logging.Level.FINE;
@@ -41,11 +42,13 @@ import com.thoughtworks.xstream.io.ExtendedHierarchicalStreamWriterHelper;
 import com.thoughtworks.xstream.io.HierarchicalStreamReader;
 import com.thoughtworks.xstream.io.HierarchicalStreamWriter;
 import com.thoughtworks.xstream.mapper.Mapper;
+import com.thoughtworks.xstream.security.InputManipulationException;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.diagnosis.OldDataMonitor;
 import hudson.model.Saveable;
 import hudson.security.ACL;
 import java.lang.reflect.Field;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -63,6 +66,7 @@ import jenkins.util.SystemProperties;
 import jenkins.util.xstream.CriticalXStreamException;
 import net.jcip.annotations.GuardedBy;
 import org.acegisecurity.Authentication;
+import org.jvnet.tiger_types.Types;
 
 /**
  * Custom {@link ReflectionConverter} that handle errors more gracefully.
@@ -78,7 +82,7 @@ import org.acegisecurity.Authentication;
 @SuppressWarnings({"rawtypes", "unchecked"})
 public class RobustReflectionConverter implements Converter {
 
-    private static /* non-final for Groovy */ boolean RECORD_FAILURES_FOR_ALL_AUTHENTICATIONS = SystemProperties.getBoolean(RobustReflectionConverter.class.getName() + ".recordFailuresForAllAuthentications", false);
+    static /* non-final for Groovy */ boolean RECORD_FAILURES_FOR_ALL_AUTHENTICATIONS = SystemProperties.getBoolean(RobustReflectionConverter.class.getName() + ".recordFailuresForAllAuthentications", false);
     private static /* non-final for Groovy */ boolean RECORD_FAILURES_FOR_ADMINS = SystemProperties.getBoolean(RobustReflectionConverter.class.getName() + ".recordFailuresForAdmins", false);
 
     protected final ReflectionProvider reflectionProvider;
@@ -98,6 +102,7 @@ public class RobustReflectionConverter implements Converter {
     public RobustReflectionConverter(Mapper mapper, ReflectionProvider reflectionProvider) {
         this(mapper, reflectionProvider, new XStream2().new PluginClassOwnership());
     }
+
     RobustReflectionConverter(Mapper mapper, ReflectionProvider reflectionProvider, XStream2.ClassOwnership classOwnership) {
         this.mapper = mapper;
         this.reflectionProvider = reflectionProvider;
@@ -122,7 +127,7 @@ public class RobustReflectionConverter implements Converter {
             criticalFieldsLock.writeLock().unlock();
         }
     }
-    
+
     private boolean hasCriticalField(Class<?> clazz, String field) {
         // Lock the write lock
         criticalFieldsLock.readLock().lock();
@@ -173,6 +178,7 @@ public class RobustReflectionConverter implements Converter {
             }
             return c;
         }
+
         private void startVisiting(HierarchicalStreamWriter writer, String owner) {
             if (owner != null) {
                 boolean redundant = false;
@@ -188,6 +194,7 @@ public class RobustReflectionConverter implements Converter {
             }
             addFirst(owner);
         }
+
         private void stopVisiting() {
             removeFirst();
         }
@@ -261,12 +268,12 @@ public class RobustReflectionConverter implements Converter {
                         writer.addAttribute(mapper.aliasForAttribute("defined-in"), mapper.serializedClass(definedIn));
                     }
 
-                    Field field = reflectionProvider.getField(definedIn,fieldName);
+                    Field field = reflectionProvider.getField(definedIn, fieldName);
                     marshallField(context, newObj, field);
                     writer.endNode();
                 } catch (RuntimeException e) {
                     // intercept an exception so that the stack trace shows how we end up marshalling the object in question
-                    throw new RuntimeException("Failed to serialize "+definedIn.getName()+"#"+fieldName+" for "+source.getClass(),e);
+                    throw new RuntimeException("Failed to serialize " + definedIn.getName() + "#" + fieldName + " for " + source.getClass(), e);
                 }
             }
 
@@ -300,7 +307,7 @@ public class RobustReflectionConverter implements Converter {
             boolean fieldExistsInClass = fieldDefinedInClass(result, attrName);
             if (fieldExistsInClass) {
                 Field field = reflectionProvider.getField(result.getClass(), attrName);
-                SingleValueConverter converter = mapper.getConverterFromAttribute(field.getDeclaringClass(),attrName,field.getType());
+                SingleValueConverter converter = mapper.getConverterFromAttribute(field.getDeclaringClass(), attrName, field.getType());
                 Class type = field.getType();
                 if (converter == null) {
                     converter = mapper.getConverterFromItemType(type); // TODO add fieldName & definedIn args
@@ -319,7 +326,8 @@ public class RobustReflectionConverter implements Converter {
             }
         }
 
-        Map implicitCollectionsForCurrentObject = null;
+        Map<String, Collection<Object>> implicitCollectionsForCurrentObject = new HashMap<>();
+        Map<String, Class<?>> implicitCollectionElementTypesForCurrentObject = new HashMap<>();
         while (reader.hasMoreChildren()) {
             reader.moveDown();
 
@@ -336,12 +344,12 @@ public class RobustReflectionConverter implements Converter {
                 boolean implicitCollectionHasSameName = mapper.getImplicitCollectionDefForFieldName(result.getClass(), reader.getNodeName()) != null;
 
                 Class classDefiningField = determineWhichClassDefinesField(reader);
-                boolean fieldExistsInClass = !implicitCollectionHasSameName && fieldDefinedInClass(result,fieldName);
+                boolean fieldExistsInClass = !implicitCollectionHasSameName && fieldDefinedInClass(result, fieldName);
 
                 Class type = determineType(reader, fieldExistsInClass, result, fieldName, classDefiningField);
                 final Object value;
                 if (fieldExistsInClass) {
-                    Field field = reflectionProvider.getField(result.getClass(),fieldName);
+                    Field field = reflectionProvider.getField(result.getClass(), fieldName);
                     value = unmarshalField(context, result, type, field);
                     // TODO the reflection provider should have returned the proper field in first place ....
                     Class definedType = reflectionProvider.getFieldType(result, fieldName, classDefiningField);
@@ -360,11 +368,17 @@ public class RobustReflectionConverter implements Converter {
                         reflectionProvider.writeField(result, fieldName, value, classDefiningField);
                         seenFields.add(classDefiningField, fieldName);
                     } else {
-                        implicitCollectionsForCurrentObject = writeValueToImplicitCollection(context, value, implicitCollectionsForCurrentObject, result, fieldName);
+                        writeValueToImplicitCollection(reader, context, value, implicitCollectionsForCurrentObject, implicitCollectionElementTypesForCurrentObject, result, fieldName);
                     }
                 }
             } catch (CriticalXStreamException e) {
                 throw e;
+            } catch (InputManipulationException e) {
+                LOGGER.warning(
+                        "DoS detected and prevented. If the heuristic was too aggressive, " +
+                                "you can customize the behavior by setting the hudson.util.XStream2.collectionUpdateLimit system property. " +
+                                "See https://www.jenkins.io/redirect/xstream-dos-prevention for more information.");
+                throw new CriticalXStreamException(e);
             } catch (XStreamException e) {
                 if (critical) {
                     throw new CriticalXStreamException(e);
@@ -383,7 +397,7 @@ public class RobustReflectionConverter implements Converter {
         // Report any class/field errors in Saveable objects if it happens during loading of existing data from disk
         if (shouldReportUnloadableDataForCurrentUser() && context.get("ReadError") != null && context.get("Saveable") == result) {
             // Avoid any error in OldDataMonitor to be catastrophic. See JENKINS-62231 and JENKINS-59582
-            // The root cause is the OldDataMonitor extension is not ready before a plugin triggers an error, for 
+            // The root cause is the OldDataMonitor extension is not ready before a plugin triggers an error, for
             // example when trying to load a field that was created by a new version and you downgrade to the previous
             // one.
             try {
@@ -426,7 +440,7 @@ public class RobustReflectionConverter implements Converter {
 
     public static void addErrorInContext(UnmarshallingContext context, Throwable e) {
         LOGGER.log(FINE, "Failed to load", e);
-        ArrayList<Throwable> list = (ArrayList<Throwable>)context.get("ReadError");
+        ArrayList<Throwable> list = (ArrayList<Throwable>) context.get("ReadError");
         if (list == null)
             context.put("ReadError", list = new ArrayList<>());
         list.add(e);
@@ -435,23 +449,28 @@ public class RobustReflectionConverter implements Converter {
     private boolean fieldDefinedInClass(Object result, String attrName) {
         // during unmarshalling, unmarshal into transient fields like XStream 1.1.3
         //boolean fieldExistsInClass = reflectionProvider.fieldDefinedInClass(attrName, result.getClass());
-        return reflectionProvider.getFieldOrNull(result.getClass(),attrName)!=null;
+        return reflectionProvider.getFieldOrNull(result.getClass(), attrName) != null;
     }
 
     protected Object unmarshalField(final UnmarshallingContext context, final Object result, Class type, Field field) {
         Converter converter = mapper.getLocalConverter(field.getDeclaringClass(), field.getName());
+        if (converter == null) {
+            if (new RobustCollectionConverter(mapper, reflectionProvider).canConvert(type)) {
+                converter = new RobustCollectionConverter(mapper, reflectionProvider, field.getGenericType());
+            } else if (new RobustMapConverter(mapper).canConvert(type)) {
+                converter = new RobustMapConverter(mapper, field.getGenericType());
+            }
+        }
         return context.convertAnother(result, type, converter);
     }
 
-    private Map writeValueToImplicitCollection(UnmarshallingContext context, Object value, Map implicitCollections, Object result, String itemFieldName) {
+    private void writeValueToImplicitCollection(HierarchicalStreamReader reader, UnmarshallingContext context, Object value, Map<String, Collection<Object>> implicitCollections, Map<String, Class<?>> implicitCollectionElementTypes, Object result, String itemFieldName) {
         String fieldName = mapper.getFieldNameForItemTypeAndName(context.getRequiredType(), value.getClass(), itemFieldName);
         if (fieldName != null) {
-            if (implicitCollections == null) {
-                implicitCollections = new HashMap(); // lazy instantiation
-            }
-            Collection collection = (Collection) implicitCollections.get(fieldName);
+            Collection collection = implicitCollections.get(fieldName);
             if (collection == null) {
-                Class fieldType = mapper.defaultImplementationOf(reflectionProvider.getFieldType(result, fieldName, null));
+                Field field = reflectionProvider.getField(result.getClass(), fieldName);
+                Class<?> fieldType = mapper.defaultImplementationOf(field.getType());
                 if (!Collection.class.isAssignableFrom(fieldType)) {
                     throw new ObjectAccessException("Field " + fieldName + " of " + result.getClass().getName() +
                             " is configured for an implicit Collection, but field is of type " + fieldType.getName());
@@ -459,13 +478,28 @@ public class RobustReflectionConverter implements Converter {
                 if (pureJavaReflectionProvider == null) {
                     pureJavaReflectionProvider = new PureJavaReflectionProvider();
                 }
-                collection = (Collection)pureJavaReflectionProvider.newInstance(fieldType);
+                collection = (Collection) pureJavaReflectionProvider.newInstance(fieldType);
                 reflectionProvider.writeField(result, fieldName, collection, null);
                 implicitCollections.put(fieldName, collection);
+                Type fieldGenericType = field.getGenericType();
+                Type elementGenericType = Types.getTypeArgument(Types.getBaseClass(fieldGenericType, Collection.class), 0, Object.class);
+                Class<?> elementType = Types.erasure(elementGenericType);
+                implicitCollectionElementTypes.put(fieldName, elementType);
+            }
+            Class<?> elementType = implicitCollectionElementTypes.getOrDefault(fieldName, Object.class);
+            if (!elementType.isInstance(value)) {
+                var exception = new ConversionException("Invalid element type for implicit collection for field: " + fieldName);
+                // c.f. TreeUnmarshaller.addInformationTo
+                exception.add("required-type", elementType.getName());
+                exception.add("class", value.getClass().getName());
+                exception.add("converter-type", getClass().getName());
+                reader.appendErrors(exception);
+                throw exception;
             }
             collection.add(value);
+        } else {
+            // TODO: Should we warn in this case? The value will be ignored.
         }
-        return implicitCollections;
     }
 
     private Class determineWhichClassDefinesField(HierarchicalStreamReader reader) {
@@ -509,7 +543,7 @@ public class RobustReflectionConverter implements Converter {
         if (classAttribute != null) {
             Class specifiedType = mapper.realClass(classAttribute);
             Class fieldType = reflectionProvider.getFieldType(result, fieldName, definedInCls);
-            if(fieldType.isAssignableFrom(specifiedType))
+            if (fieldType.isAssignableFrom(specifiedType))
                 // make sure that the specified type in XML is compatible with the field type.
                 // this allows the code to evolve in more flexible way.
                 return specifiedType;

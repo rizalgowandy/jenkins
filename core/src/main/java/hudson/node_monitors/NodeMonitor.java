@@ -1,18 +1,18 @@
 /*
  * The MIT License
- * 
+ *
  * Copyright (c) 2004-2009, Sun Microsystems, Inc., Kohsuke Kawaguchi, Thomas J. Black
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.node_monitors;
 
 import edu.umd.cs.findbugs.annotations.CheckForNull;
@@ -36,6 +37,7 @@ import hudson.tasks.Publisher;
 import hudson.util.DescriptorList;
 import java.util.List;
 import jenkins.model.Jenkins;
+import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
 
@@ -53,12 +55,15 @@ import org.kohsuke.stapler.export.ExportedBean;
  * <dt>config.jelly (optional)</dt>
  * <dd>
  * Configuration fragment to be displayed in {@code http://server/hudson/computer/configure}.
- * Used for configuring the threshold for taking nodes offline. 
+ * Used for configuring the threshold for taking nodes offline.
  * </dl>
  *
  * <h2>Persistence</h2>
  * <p>
  * {@link NodeMonitor}s are persisted via XStream.
+ *
+ * <h2>CasC</h2>
+ * To be able to configure {@link NodeMonitor}s via JCasC, they should have a {@link org.kohsuke.stapler.DataBoundConstructor}
  *
  * @author Kohsuke Kawaguchi
  * @since 1.123
@@ -129,6 +134,7 @@ public abstract class NodeMonitor implements ExtensionPoint, Describable<NodeMon
         return ignored;
     }
 
+    @DataBoundSetter
     public void setIgnored(boolean ignored) {
         this.ignored = ignored;
     }
@@ -144,7 +150,7 @@ public abstract class NodeMonitor implements ExtensionPoint, Describable<NodeMon
     /**
      * Returns all the registered {@link NodeMonitor} descriptors.
      */
-    public static DescriptorExtensionList<NodeMonitor,Descriptor<NodeMonitor>> all() {
+    public static DescriptorExtensionList<NodeMonitor, Descriptor<NodeMonitor>> all() {
         return Jenkins.get().getDescriptorList(NodeMonitor.class);
     }
 }

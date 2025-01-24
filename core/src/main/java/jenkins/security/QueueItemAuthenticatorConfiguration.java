@@ -11,7 +11,7 @@ import jenkins.model.GlobalConfiguration;
 import jenkins.model.GlobalConfigurationCategory;
 import net.sf.json.JSONObject;
 import org.jenkinsci.Symbol;
-import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerRequest2;
 
 /**
  * Show the {@link QueueItemAuthenticator} configurations on the system config page.
@@ -21,7 +21,7 @@ import org.kohsuke.stapler.StaplerRequest;
  */
 @Extension @Symbol("queueItemAuthenticator")
 public class QueueItemAuthenticatorConfiguration extends GlobalConfiguration implements PersistentDescriptor {
-    private final DescribableList<QueueItemAuthenticator,QueueItemAuthenticatorDescriptor> authenticators
+    private final DescribableList<QueueItemAuthenticator, QueueItemAuthenticatorDescriptor> authenticators
         = new DescribableList<>(this);
 
     private Object readResolve() {
@@ -47,12 +47,12 @@ public class QueueItemAuthenticatorConfiguration extends GlobalConfiguration imp
     }
 
     @Override
-    public boolean configure(StaplerRequest req, JSONObject json) throws FormException {
+    public boolean configure(StaplerRequest2 req, JSONObject json) throws FormException {
         try {
-            authenticators.rebuildHetero(req,json, QueueItemAuthenticatorDescriptor.all(),"authenticators");
+            authenticators.rebuildHetero(req, json, QueueItemAuthenticatorDescriptor.all(), "authenticators");
             return true;
         } catch (IOException e) {
-            throw new FormException(e,"authenticators");
+            throw new FormException(e, "authenticators");
         }
     }
 

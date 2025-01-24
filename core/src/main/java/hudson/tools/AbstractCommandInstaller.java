@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.tools;
 
 import hudson.FilePath;
@@ -37,7 +38,7 @@ import org.kohsuke.stapler.QueryParameter;
  * @see BatchCommandInstaller
  * @see CommandInstaller
  * @author Oleg Nenashev
- * 
+ *
  */
 public abstract class AbstractCommandInstaller extends ToolInstaller {
 
@@ -89,7 +90,7 @@ public abstract class AbstractCommandInstaller extends ToolInstaller {
             extends ToolInstallerDescriptor<TInstallerClass> {
 
         public FormValidation doCheckCommand(@QueryParameter String value) {
-            if (value.length() > 0) {
+            if (!value.isEmpty()) {
                 return FormValidation.ok();
             } else {
                 return FormValidation.error(Messages.CommandInstaller_no_command());
@@ -97,7 +98,7 @@ public abstract class AbstractCommandInstaller extends ToolInstaller {
         }
 
         public FormValidation doCheckToolHome(@QueryParameter String value) {
-            if (value.length() > 0) {
+            if (!value.isEmpty()) {
                 return FormValidation.ok();
             } else {
                 return FormValidation.error(Messages.CommandInstaller_no_toolHome());

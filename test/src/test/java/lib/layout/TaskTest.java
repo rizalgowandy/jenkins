@@ -21,22 +21,23 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package lib.layout;
 
 import static org.junit.Assert.assertTrue;
 
-import com.gargoylesoftware.htmlunit.html.HtmlElementUtil;
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import hudson.model.UnprotectedRootAction;
+import jakarta.servlet.ServletException;
 import java.io.IOException;
-import javax.servlet.ServletException;
+import org.htmlunit.html.HtmlElementUtil;
+import org.htmlunit.html.HtmlPage;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.JenkinsRule.WebClient;
 import org.jvnet.hudson.test.TestExtension;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 import org.kohsuke.stapler.interceptor.RequirePOST;
 
 public class TaskTest {
@@ -51,9 +52,11 @@ public class TaskTest {
     }
 
     @TestExtension("postLink") public static final MockAction postLink = new MockAction();
+
     public static class MockAction implements UnprotectedRootAction {
         private boolean called = false;
-        @RequirePOST public void doPost(StaplerRequest req, StaplerResponse rsp) throws ServletException, IOException {
+
+        @RequirePOST public void doPost(StaplerRequest2 req, StaplerResponse2 rsp) throws ServletException, IOException {
             if (called) throw new AssertionError();
             called = true;
             rsp.forwardToPreviousPage(req);

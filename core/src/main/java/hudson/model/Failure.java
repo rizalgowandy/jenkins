@@ -21,15 +21,16 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.model;
 
 import edu.umd.cs.findbugs.annotations.CheckForNull;
+import jakarta.servlet.ServletException;
 import java.io.IOException;
-import javax.servlet.ServletException;
 import jenkins.model.Jenkins;
 import org.kohsuke.stapler.HttpResponse;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.StaplerRequest2;
+import org.kohsuke.stapler.StaplerResponse2;
 
 /**
  * Represents an error induced by user, encountered during HTTP request processing.
@@ -37,7 +38,7 @@ import org.kohsuke.stapler.StaplerResponse;
  * <p>
  * The error page is rendered into HTML, but without a stack trace. So only use
  * this exception when the error condition is anticipated by the program, and where
- * we nor users don't need to see the stack trace to figure out the root cause. 
+ * we nor users don't need to see the stack trace to figure out the root cause.
  *
  * @author Kohsuke Kawaguchi
  * @since 1.321
@@ -46,7 +47,7 @@ public class Failure extends RuntimeException implements HttpResponse {
     private final boolean pre;
 
     public Failure(String message) {
-        this(message,false);
+        this(message, false);
     }
 
     public Failure(String message, boolean pre) {
@@ -54,7 +55,7 @@ public class Failure extends RuntimeException implements HttpResponse {
         this.pre = pre;
     }
 
-    public void generateResponse(StaplerRequest req, StaplerResponse rsp, Object node, @CheckForNull Throwable throwable) throws IOException, ServletException {
+    public void generateResponse(StaplerRequest2 req, StaplerResponse2 rsp, Object node, @CheckForNull Throwable throwable) throws IOException, ServletException {
         if (throwable != null) {
             req.setAttribute("exception", throwable);
         }
@@ -62,13 +63,13 @@ public class Failure extends RuntimeException implements HttpResponse {
     }
 
     @Override
-    public void generateResponse(StaplerRequest req, StaplerResponse rsp, Object node) throws IOException, ServletException {
-        req.setAttribute("message",getMessage());
-        if(pre)
-            req.setAttribute("pre",true);
+    public void generateResponse(StaplerRequest2 req, StaplerResponse2 rsp, Object node) throws IOException, ServletException {
+        req.setAttribute("message", getMessage());
+        if (pre)
+            req.setAttribute("pre", true);
         if (node instanceof AbstractItem) // Maintain ancestors
-            rsp.forward(Jenkins.get(), ((AbstractItem)node).getUrl() + "error", req);
+            rsp.forward(Jenkins.get(), ((AbstractItem) node).getUrl() + "error", req);
         else
-            rsp.forward(node instanceof AbstractModelObject ? node : Jenkins.get() ,"error", req);
+            rsp.forward(node instanceof AbstractModelObject ? node : Jenkins.get(), "error", req);
     }
 }

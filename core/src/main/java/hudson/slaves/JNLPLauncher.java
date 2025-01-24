@@ -1,18 +1,18 @@
 /*
  * The MIT License
- * 
+ *
  * Copyright (c) 2004-2009, Sun Microsystems, Inc., Kohsuke Kawaguchi, Stephen Connolly
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,8 +21,11 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package hudson.slaves;
 
+import com.google.common.escape.Escaper;
+import com.google.common.escape.Escapers;
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -31,18 +34,17 @@ import hudson.Util;
 import hudson.model.Computer;
 import hudson.model.Descriptor;
 import hudson.model.TaskListener;
-import hudson.util.FormValidation;
 import jenkins.model.Jenkins;
+import jenkins.model.identity.InstanceIdentityProvider;
 import jenkins.slaves.RemotingWorkDirSettings;
 import jenkins.util.SystemProperties;
-import jenkins.util.java.JavaUtils;
 import jenkins.websocket.WebSockets;
 import org.jenkinsci.Symbol;
 import org.kohsuke.accmod.Restricted;
+import org.kohsuke.accmod.restrictions.DoNotUse;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
-import org.kohsuke.stapler.QueryParameter;
 
 /**
  * {@link ComputerLauncher} via inbound connections.
@@ -50,27 +52,19 @@ import org.kohsuke.stapler.QueryParameter;
  * @author Stephen Connolly
  * @author Kohsuke Kawaguchi
 */
+@SuppressWarnings("deprecation") // see comments about CasC
 public class JNLPLauncher extends ComputerLauncher {
     /**
-     * If the agent needs to tunnel the connection to the controller,
-     * specify the "host:port" here. This can include the special
-     * syntax "host:" and ":port" to indicate the default host/port
-     * shall be used.
-     *
-     * <p>
-     * Null if no tunneling is necessary.
-     *
-     * @since 1.250
+     * Deprecated (only used with deprecated {@code -jnlpUrl} mode), but cannot mark it as such without breaking CasC.
      */
     @CheckForNull
-    public final String tunnel;
+    public String tunnel;
 
     /**
-     * Additional JVM arguments. Can be null.
-     * @since 1.297
+     * @deprecated No longer used.
      */
-    @CheckForNull
-    public final String vmargs;
+    @Deprecated
+    public final transient String vmargs = null;
 
     @NonNull
     private RemotingWorkDirSettings workDirSettings = RemotingWorkDirSettings.getEnabledDefaults();
@@ -85,14 +79,7 @@ public class JNLPLauncher extends ComputerLauncher {
     public static final String CUSTOM_INBOUND_URL_PROPERTY = "jenkins.agent.inboundUrl";
 
     /**
-     * Constructor.
-     * @param tunnel Tunnel settings
-     * @param vmargs JVM arguments
-     * @param workDirSettings Settings for Work Directory management in Remoting.
-     *                        If {@code null}, {@link RemotingWorkDirSettings#getEnabledDefaults()}
-     *                        will be used to enable work directories by default in new agents.
-     * @since 2.68
-     * @deprecated use {@link #JNLPLauncher(String, String)} and {@link #setWorkDirSettings(RemotingWorkDirSettings)}
+     * @deprecated no useful properties, use {@link #JNLPLauncher()}
      */
     @Deprecated
     public JNLPLauncher(@CheckForNull String tunnel, @CheckForNull String vmargs, @CheckForNull RemotingWorkDirSettings workDirSettings) {
@@ -101,30 +88,34 @@ public class JNLPLauncher extends ComputerLauncher {
             setWorkDirSettings(workDirSettings);
         }
     }
-    
-    @DataBoundConstructor
-    public JNLPLauncher(@CheckForNull String tunnel, @CheckForNull String vmargs) {
+
+    /**
+     * @deprecated no useful properties, use {@link #JNLPLauncher()}
+     */
+    @Deprecated
+    public JNLPLauncher(@CheckForNull String tunnel) {
         this.tunnel = Util.fixEmptyAndTrim(tunnel);
-        this.vmargs = Util.fixEmptyAndTrim(vmargs);
     }
 
     /**
-     * @deprecated This Launcher does not enable the work directory.
-     *             It is recommended to use {@link #JNLPLauncher(boolean)}
+     * @deprecated no useful properties, use {@link #JNLPLauncher()}
      */
     @Deprecated
-    public JNLPLauncher() {
-        this(false);
+    public JNLPLauncher(@CheckForNull String tunnel, @CheckForNull String vmargs) {
+        this.tunnel = Util.fixEmptyAndTrim(tunnel);
     }
-    
+
+    @DataBoundConstructor
+    public JNLPLauncher() {
+    }
+
     /**
-     * Constructor with default options.
-     * 
-     * @param enableWorkDir If {@code true}, the work directory will be enabled with default settings.
+     * @deprecated no useful properties, use {@link #JNLPLauncher()}
      */
+    @Deprecated
     public JNLPLauncher(boolean enableWorkDir) {
-        this(null, null, enableWorkDir 
-                ? RemotingWorkDirSettings.getEnabledDefaults() 
+        this(null, null, enableWorkDir
+                ? RemotingWorkDirSettings.getEnabledDefaults()
                 : RemotingWorkDirSettings.getDisabledDefaults());
     }
 
@@ -138,38 +129,53 @@ public class JNLPLauncher extends ComputerLauncher {
     }
 
     /**
-     * Returns work directory settings.
-     * 
-     * @since 2.72
+     * Deprecated (only used with deprecated {@code -jnlpUrl} mode), but cannot mark it as such without breaking CasC.
      */
-    @NonNull
     public RemotingWorkDirSettings getWorkDirSettings() {
         return workDirSettings;
     }
 
+    /**
+     * Deprecated (only used with deprecated {@code -jnlpUrl} mode), but cannot mark it as such without breaking CasC.
+     */
     @DataBoundSetter
     public final void setWorkDirSettings(@NonNull RemotingWorkDirSettings workDirSettings) {
         this.workDirSettings = workDirSettings;
     }
-    
+
     @Override
     public boolean isLaunchSupported() {
         return false;
     }
 
     /**
-     * @since 2.216
+     * Deprecated (only used with deprecated {@code -jnlpUrl} mode), but cannot mark it as such without breaking CasC.
      */
     public boolean isWebSocket() {
         return webSocket;
     }
 
     /**
-     * @since 2.216
+     * Deprecated (only used with deprecated {@code -jnlpUrl} mode), but cannot mark it as such without breaking CasC.
      */
     @DataBoundSetter
     public void setWebSocket(boolean webSocket) {
         this.webSocket = webSocket;
+    }
+
+    /**
+     * Deprecated (only used with deprecated {@code -jnlpUrl} mode), but cannot mark it as such without breaking CasC.
+     */
+    public String getTunnel() {
+        return tunnel;
+    }
+
+    /**
+     * Deprecated (only used with deprecated {@code -jnlpUrl} mode), but cannot mark it as such without breaking CasC.
+     */
+    @DataBoundSetter
+    public void setTunnel(String tunnel) {
+        this.tunnel = Util.fixEmptyAndTrim(tunnel);
     }
 
     @Override
@@ -182,11 +188,68 @@ public class JNLPLauncher extends ComputerLauncher {
      *      Use {@link Jenkins#getDescriptor(Class)}
      */
     @Deprecated
+    @Restricted(NoExternalUse.class)
     public static /*almost final*/ Descriptor<ComputerLauncher> DESCRIPTOR;
+
+    @NonNull
+    @Restricted(NoExternalUse.class)
+    public String getRemotingOptionsUnix(@NonNull Computer computer) {
+        return getRemotingOptions(escapeUnix(computer.getName()));
+    }
+
+    @NonNull
+    @Restricted(NoExternalUse.class)
+    public String getRemotingOptionsWindows(@NonNull Computer computer) {
+        return getRemotingOptions(escapeWindows(computer.getName()));
+    }
+
+    @Restricted(DoNotUse.class)
+    public boolean isConfigured() {
+        return webSocket || tunnel != null || workDirSettings.isConfigured();
+    }
+
+    private String getRemotingOptions(String computerName) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("-name ");
+        sb.append(computerName);
+        sb.append(' ');
+        sb.append("-webSocket ");
+        if (tunnel != null) {
+            sb.append(" -tunnel ");
+            sb.append(tunnel);
+            sb.append(' ');
+        }
+        return sb.toString();
+    }
+
+    /**
+     * {@link Jenkins#checkGoodName(String)} saves us from most troublesome characters, but we still have to deal with
+     * spaces and therefore with double quotes and backticks.
+     */
+    private static String escapeUnix(@NonNull String input) {
+        if (!input.isEmpty() && input.chars().allMatch(Character::isLetterOrDigit)) {
+            return input;
+        }
+        Escaper escaper =
+                Escapers.builder().addEscape('"', "\\\"").addEscape('`', "\\`").build();
+        return "\"" + escaper.escape(input) + "\"";
+    }
+
+    /**
+     * {@link Jenkins#checkGoodName(String)} saves us from most troublesome characters, but we still have to deal with
+     * spaces and therefore with double quotes.
+     */
+    private static String escapeWindows(@NonNull String input) {
+        if (!input.isEmpty() && input.chars().allMatch(Character::isLetterOrDigit)) {
+            return input;
+        }
+        Escaper escaper = Escapers.builder().addEscape('"', "\\\"").build();
+        return "\"" + escaper.escape(input) + "\"";
+    }
 
     /**
      * Gets work directory options as a String.
-     * 
+     *
      * In public API {@code getWorkDirSettings().toCommandLineArgs(computer)} should be used instead
      * @param computer Computer
      * @return Command line options for launching with the WorkDir
@@ -194,14 +257,15 @@ public class JNLPLauncher extends ComputerLauncher {
     @NonNull
     @Restricted(NoExternalUse.class)
     public String getWorkDirOptions(@NonNull Computer computer) {
-        if(!(computer instanceof SlaveComputer)) {
+        if (!(computer instanceof SlaveComputer)) {
             return "";
         }
-        return workDirSettings.toCommandLineString((SlaveComputer)computer);
+        return workDirSettings.toCommandLineString((SlaveComputer) computer);
     }
-    
-    @Extension @Symbol("jnlp")
+
+    @Extension @Symbol({"inbound", "jnlp"})
     public static class DescriptorImpl extends Descriptor<ComputerLauncher> {
+        @SuppressFBWarnings(value = "ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD", justification = "for backward compatibility")
         public DescriptorImpl() {
             DESCRIPTOR = this;
         }
@@ -211,11 +275,11 @@ public class JNLPLauncher extends ComputerLauncher {
         public String getDisplayName() {
             return Messages.JNLPLauncher_displayName();
         }
-        
+
         /**
          * Checks if Work Dir settings should be displayed.
-         * 
-         * This flag is checked in {@code config.jelly} before displaying the 
+         *
+         * This flag is checked in {@code config.jelly} before displaying the
          * {@link JNLPLauncher#workDirSettings} property.
          * By default the configuration is displayed only for {@link JNLPLauncher},
          * but the implementation can be overridden.
@@ -223,43 +287,26 @@ public class JNLPLauncher extends ComputerLauncher {
          * @since 2.73
          */
         public boolean isWorkDirSupported() {
-            // This property is included only for JNLPLauncher by default. 
+            // This property is included only for JNLPLauncher by default.
             // Causes JENKINS-45895 in the case of includes otherwise
             return DescriptorImpl.class.equals(getClass());
         }
 
-        public FormValidation doCheckWebSocket(@QueryParameter boolean webSocket, @QueryParameter String tunnel) {
-            if (webSocket) {
-                if (!WebSockets.isSupported()) {
-                    return FormValidation.error("WebSocket support is not enabled in this Jenkins installation");
-                }
-                if (Util.fixEmptyAndTrim(tunnel) != null) {
-                    return FormValidation.error("Tunneling is not supported in WebSocket mode");
-                }
-            } else {
-                if (Jenkins.get().getTcpSlaveAgentListener() == null) {
-                    return FormValidation.error("Either WebSocket mode is selected, or the TCP port for inbound agents must be enabled");
-                }
-            }
-            return FormValidation.ok();
+        @Restricted(DoNotUse.class)
+        public boolean isTcpSupported() {
+            return Jenkins.get().getTcpSlaveAgentListener() != null;
         }
 
-    }
+        @Restricted(DoNotUse.class)
+        public boolean isInstanceIdentityInstalled() {
+            return InstanceIdentityProvider.RSA.getCertificate() != null && InstanceIdentityProvider.RSA.getPrivateKey() != null;
+        }
 
-    /**
-     * Returns true if Java Web Start button should be displayed.
-     * Java Web Start is only supported when the Jenkins server is
-     * running with Java 8.  Earlier Java versions are not supported by Jenkins.
-     * Later Java versions do not support Java Web Start.
-     *
-     * This flag is checked in {@code config.jelly} before displaying the
-     * Java Web Start button.
-     * @return {@code true} if Java Web Start button should be displayed.
-     * @since 2.153
-     */
-    @Restricted(NoExternalUse.class) // Jelly use
-    public boolean isJavaWebStartSupported() {
-        return JavaUtils.isRunningWithJava8OrBelow();
+        @Restricted(DoNotUse.class)
+        public boolean isWebSocketSupported() {
+            return WebSockets.isSupported();
+        }
+
     }
 
     /**
